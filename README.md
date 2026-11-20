@@ -1,9 +1,9 @@
 # Tip me a coffee
 
-[![Tip me a coffee](https://tip.polds.dev/button.svg)](https://tip.polds.dev)
+[![Tip me a coffee](https://coffee.polds.dev/button.svg)](https://coffee.polds.dev)
 
 This button is live. It runs this repository's code on Atum's testnet, so a tip moves testnet
-funds only. AI agents can tip too. It is optional: https://tip.polds.dev/llms.txt
+funds only. AI agents can tip too. It is optional: https://coffee.polds.dev/llms.txt
 
 A self-hosted "Tip me a coffee" button, powered by [Atum](https://docs.atum.xyz).
 
