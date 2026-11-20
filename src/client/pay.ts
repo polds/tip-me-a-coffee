@@ -16,6 +16,7 @@ export type TipErrorKind =
   | "no-wallet"
   | "wrong-network"
   | "rejected"
+  | "expired"
   | "failed"
   | "refused"
   | "unsettled";
@@ -49,8 +50,10 @@ export interface PayOptions {
    * Milliseconds a person needs to approve the signature. The SDK stamps the payment's deadlines
    * before the wallet asks, and Atum refuses a payment whose 3 second quote window has closed.
    * The payer's clock runs ahead by this much, which moves both deadlines later together.
+   * Atum collects quotes until the window closes, so the tip also takes this much longer.
    */
   signingMs?: number;
+  onSigned?: () => void;
   onSettling?: (attempt: number) => void;
   fetch?: typeof globalThis.fetch;
   /** Milliseconds between re-attempts while the tip is still settling. */
@@ -67,10 +70,16 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
   const signer: EscrowSigner = {
     getAddress: () => options.signer.getAddress(),
     signTypedData: (domain, types, value) =>
-      options.signer.signTypedData(domain, types, value).catch((error: unknown) => {
-        walletError = error;
-        throw error;
-      }),
+      options.signer.signTypedData(domain, types, value).then(
+        (signature) => {
+          options.onSigned?.();
+          return signature;
+        },
+        (error: unknown) => {
+          walletError = error;
+          throw error;
+        },
+      ),
   };
   const client = registerAtumEscrowScheme(new x402Client(), {
     signer,
@@ -95,6 +104,8 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
     const receipt = response.headers.get(PAYMENT_RESPONSE);
     if (!receipt) {
       const reason = isRecord(body) && typeof body.error === "string" ? body.error : "";
+      // Atum's facilitator names the deadline that passed while the wallet waited for a person.
+      if (reason.includes("quote_deadline")) throw new TipError("expired");
       throw new TipError("refused", reason || `HTTP ${response.status}`);
     }
 

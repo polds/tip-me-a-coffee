@@ -5,6 +5,7 @@ import {
   type Asset,
   type Config,
   ConfigError,
+  chainName,
   type Network,
   parseConfig,
 } from "./config.ts";
@@ -142,6 +143,8 @@ export interface Menu {
     /** The ways to pay it, with the most each can cost: for people, and in atomic units. */
     payWith: {
       network: Network;
+      /** The chain's name for people, such as "Base Sepolia". */
+      chain: string;
       asset: Address;
       symbol: string;
       maxAmount: string;
@@ -163,6 +166,7 @@ export function menuOf(tips: Tips, origin: string): Menu {
         const cap = spendCap(tips, source, fulfillment);
         return {
           network: source.network,
+          chain: chainName(source.network),
           asset: source.address,
           symbol: source.symbol,
           maxAmount: fromAtomic(cap, source.decimals),

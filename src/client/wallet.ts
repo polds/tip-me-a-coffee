@@ -10,7 +10,7 @@ import { payTip, type Thanks, TipError } from "./pay.ts";
 
 export type { TipErrorKind } from "./pay.ts";
 export { TipError };
-export type Step = "connecting" | "switching" | "approving" | "signing" | "settling";
+export type Step = "connecting" | "switching" | "approving" | "signing" | "paying" | "settling";
 
 type Tip = Menu["amounts"][number];
 
@@ -21,9 +21,6 @@ declare global {
   }
 }
 
-/** How long a person gets to read and approve the signature request in their wallet. */
-const SIGNING_MS = 30_000;
-
 /** EIP-1193 reports a request the user declined with code 4001. ethers has its own name for it. */
 const declined = (error: unknown): boolean =>
   isError(error, "ACTION_REJECTED") ||
@@ -32,7 +29,7 @@ const declined = (error: unknown): boolean =>
 async function connect(
   tip: Tip,
   onStep: (step: Step) => void,
-): Promise<{ signer: Signer; network: Network; signingMs: number }> {
+): Promise<{ signer: Signer; network: Network }> {
   const { ethereum } = window;
   if (!ethereum) throw new TipError("no-wallet");
 
@@ -48,7 +45,7 @@ async function connect(
     await ethereum
       .request({ method: "wallet_switchEthereumChain", params: [{ chainId }] })
       .catch((error: unknown) => {
-        throw declined(error) ? error : new TipError("wrong-network", source.network);
+        throw declined(error) ? error : new TipError("wrong-network", source.chain);
       });
   }
 
@@ -67,17 +64,20 @@ async function connect(
     onStep("approving");
     await ensureSourceApproval(approval);
   }
-  return { signer, network: source.network, signingMs: SIGNING_MS };
+  return { signer, network: source.network };
 }
 
 export async function sendTip(
   tip: Tip,
-  demo: boolean,
+  /** `signingMs` is how long a person gets to approve the signature in their wallet. */
+  options: { demo: boolean; signingMs: number },
   onStep: (step: Step) => void,
 ): Promise<Thanks> {
   try {
     // Demo mode signs with a key made here and dropped with the tab. No chain is involved.
-    const wallet = demo ? { signer: Wallet.createRandom() } : await connect(tip, onStep);
+    const wallet = options.demo
+      ? { signer: Wallet.createRandom() }
+      : { ...(await connect(tip, onStep)), signingMs: options.signingMs };
 
     // The identifier outlives this call until the tip reaches a final outcome. Pressing the
     // button again, or reloading, then resumes the same payment and never starts a second one.
@@ -92,6 +92,7 @@ export async function sendTip(
       url: tip.url,
       purchaseId,
       gateway: location.origin,
+      onSigned: () => onStep("paying"),
       onSettling: () => onStep("settling"),
     }).catch((error: unknown) => {
       if (error instanceof TipError && error.kind === "failed") spent();

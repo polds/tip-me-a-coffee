@@ -39,7 +39,13 @@ test("the 402 is a friendly ask that mirrors its PAYMENT-REQUIRED header", async
   const header = JSON.parse(atob(response.headers.get("PAYMENT-REQUIRED") ?? ""));
 
   assert.equal(response.status, 402);
-  assert.equal(body.error, "If this helped, please consider supporting the author.");
+  assert.equal(body.message, "If this helped, please consider supporting the author.");
+  assert.equal(header.resource.description, body.message);
+  assert.equal("error" in body, false, "asking for a tip is not an error");
+  assert.equal(
+    response.headers.get("link"),
+    `<${stub}/llms.txt>; rel="describedby"; type="text/plain"`,
+  );
   assert.partialDeepStrictEqual(body, header);
   assert.equal(header.accepts[0].extra.atumResource, "GET /tip/0.5");
   assert.equal(header.accepts[0].extra.atum.fulfillmentAmount, "500000");
@@ -147,6 +153,18 @@ test("testnet: a payment the facilitator finds invalid is never settled", async 
   assert.equal(kindOf(outcome), "refused");
   assert.match(String(outcome), /stale quote deadline/);
   assert.deepEqual(exchanges.at(-1), { status: 402 });
+  assert.equal(atum.seen.settle.length, 0);
+});
+
+test("testnet: a signature that arrives after the quote window is reported as expired", async () => {
+  const invalidReason =
+    "quote_deadline has already passed, so there is no window in which this payment could be quoted";
+  const atum = fakeAtum({ verify: { isValid: false, invalidReason } });
+  const origin = await startTips(TESTNET_VARS, atum.fetch);
+
+  const { outcome } = await tip(origin, "3");
+
+  assert.equal(kindOf(outcome), "expired");
   assert.equal(atum.seen.settle.length, 0);
 });
 

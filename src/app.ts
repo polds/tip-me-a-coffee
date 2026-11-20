@@ -82,6 +82,12 @@ export function createApp(deps: { fetch?: typeof globalThis.fetch } = {}) {
   app.use("/llms.txt", open);
   app.use("/widget.js", open);
 
+  // Agents that read headers find the instructions without parsing a page.
+  app.use(async (c, next) => {
+    await next();
+    c.header("Link", `<${originOf(c)}/llms.txt>; rel="describedby"; type="text/plain"`);
+  });
+
   app.get("/", async (c) => {
     const origin = originOf(c);
     const menu = menuOf(await tipsFor(c.env), origin);
@@ -105,14 +111,15 @@ export function createApp(deps: { fetch?: typeof globalThis.fetch } = {}) {
 
     // The amount is in the path, so each amount is its own page and the query plays no part.
     const offers = offersFor(tips, `GET /tip/${amount}`, fulfillment);
-    const ask = (error: string) => {
-      const required = paymentRequired(`${origin}/tip/${amount}`, offers, error);
+    const resource = { url: `${origin}/tip/${amount}`, description: tips.config.message };
+    const ask = (error?: string) => {
+      const required = paymentRequired(resource, offers, error);
       c.header(PAYMENT_REQUIRED, encodeHeader(required));
-      return c.json({ ...required, tip: agentNote(origin) }, 402);
+      return c.json({ ...required, message: tips.config.message, tip: agentNote(origin) }, 402);
     };
 
     const credential = c.req.header(PAYMENT_SIGNATURE);
-    if (!credential) return ask(tips.config.message);
+    if (!credential) return ask();
 
     const paymentPayload = parsePaymentPayload(credential);
     if (!paymentPayload) {

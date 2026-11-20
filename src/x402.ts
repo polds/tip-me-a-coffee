@@ -120,14 +120,21 @@ export function purchaseIdOf(payload: PaymentPayload): string | undefined {
   return isRecord(entry) && isRecord(entry.info) ? text(entry.info.id) : undefined;
 }
 
-/** The body of a 402, which PAYMENT-REQUIRED also carries. `error` holds the ask. */
-export function paymentRequired(url: string, accepts: Offer[], error: string) {
+/**
+ * The body of a 402, which PAYMENT-REQUIRED also carries. `description` is the ask. `error` is
+ * set only when a payment was tried and did not settle.
+ */
+export function paymentRequired(
+  resource: { url: string; description: string },
+  accepts: Offer[],
+  error?: string,
+) {
   return {
     x402Version: 2 as const,
-    resource: { url, description: "A tip for the author", mimeType: "application/json" },
+    resource: { ...resource, mimeType: "application/json" },
     accepts,
     extensions: { [PAYMENT_IDENTIFIER]: PAYMENT_IDENTIFIER_DECLARATION },
-    error,
+    ...(error !== undefined && { error }),
   };
 }
 

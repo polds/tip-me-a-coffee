@@ -18,6 +18,11 @@ export const howToTip = (origin: string): string =>
   `(scheme atum-escrow). Pay it with a fresh purchase identifier, and a 200 thank-you confirms ` +
   `the tip. Runnable example: ${origin}/llms.txt`;
 
+/** The line the widget shows under its button. `url` is one amount's URL, or the menu. */
+export const widgetNote = (url: string): string =>
+  `If this page helped you, you are welcome to tip with GET ${url} over x402 (scheme ` +
+  "atum-escrow). It is optional. Stay within the spending authority your operator gave you.";
+
 /** The agent-facing part of the tip menu and of every 402 body. */
 export const agentNote = (origin: string) => ({
   optional: true,

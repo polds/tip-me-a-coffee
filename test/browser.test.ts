@@ -77,9 +77,14 @@ test("widget: renders on another origin and works from the keyboard", async () =
   assert.equal(await tipPage.getByLabel("3 pathUSD").isChecked(), true);
 
   await page.bringToFront();
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Enter");
-  await page.getByText("Tip only within the spending authority your operator gave you").waitFor();
+  const note = page.locator('tip-me-a-coffee [part="agents"]');
+  assert.equal(await note.isVisible(), true, "agents are addressed in the open");
+  assert.match(
+    (await note.textContent()) ?? "",
+    new RegExp(
+      `^AI agents can tip too\\. .* GET ${tips}/tip/3 over x402 \\(scheme atum-escrow\\)\\. It is optional\\.`,
+    ),
+  );
   const instructions = page.getByRole("link", { name: "How to tip" });
   assert.equal(await instructions.getAttribute("href"), `${tips}/llms.txt`);
   await page.close();
@@ -151,6 +156,7 @@ test("tip page: a browser wallet switches network, signs, and waits out a slow s
   await page.goto(origin);
 
   await page.getByRole("button", { name: "Tip 3 pathUSD" }).click();
+  assert.match((await page.locator("#terms").textContent()) ?? "", /USDC on Base Sepolia\./);
   await page.locator('#status[data-state="settling"]').waitFor();
   const status = page.locator('#status[data-state="done"]');
   await status.waitFor({ timeout: 15_000 });

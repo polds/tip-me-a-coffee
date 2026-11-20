@@ -13,6 +13,27 @@ export interface Asset {
   address: Address;
 }
 
+/** Names for the EVM chains Atum serves. People read these. Protocol fields keep the CAIP-2 id. */
+const CHAIN_NAMES: Record<Network, string> = {
+  "eip155:1": "Ethereum",
+  "eip155:10": "Optimism",
+  "eip155:137": "Polygon",
+  "eip155:4217": "Tempo",
+  "eip155:8453": "Base",
+  "eip155:42161": "Arbitrum",
+  "eip155:42220": "Celo",
+  "eip155:43114": "Avalanche",
+  "eip155:11155111": "Ethereum Sepolia",
+  "eip155:11155420": "Optimism Sepolia",
+  "eip155:80002": "Polygon Amoy",
+  "eip155:42431": "Tempo Moderato",
+  "eip155:84532": "Base Sepolia",
+  "eip155:421614": "Arbitrum Sepolia",
+  "eip155:11142220": "Celo Sepolia",
+  "eip155:43113": "Avalanche Fuji",
+};
+export const chainName = (network: Network): string => CHAIN_NAMES[network] ?? network;
+
 export type AtumEnv = "stub" | "testnet" | "mainnet";
 
 interface Environment {
