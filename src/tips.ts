@@ -28,14 +28,12 @@ export interface Tips {
 }
 
 /**
- * Seconds the payer has, from building a payment, until Atum stops collecting quotes for it.
- * Atum's default is 3, which fits a script that signs at once. A person approving a signature in
- * a browser wallet needs longer, and the gateway waits out the whole window, so 30 trades a
- * slower tip for one a person can complete.
+ * Atum's defaults. Quotes are collected for 3 seconds after the payer builds a payment, and the
+ * gateway waits out that window, so a longer one only slows every tip. The tip must then be
+ * delivered within 5 minutes or the payer is refunded.
  */
-const QUOTE_DEADLINE_SECONDS = 30;
-/** Seconds until the tip must be delivered or refunded. Atum's default of 300 plus the window above. */
-const FULFILLMENT_DEADLINE_SECONDS = 330;
+const QUOTE_DEADLINE_SECONDS = 3;
+const FULFILLMENT_DEADLINE_SECONDS = 300;
 
 function toAtomic(amount: string, decimals: number): bigint {
   const [whole = "", fraction = ""] = amount.split(".");
@@ -62,7 +60,7 @@ export async function loadTips(
     const id = `${asset.network}/erc20:${asset.address}`;
     const chain = await atum.defaults(asset.network);
     const listed = chain?.tokens.find(
-      (candidate) => candidate.address.toLowerCase() === asset.address.toLowerCase(),
+      (token) => token.address.toLowerCase() === asset.address.toLowerCase(),
     );
     if (!chain || !listed) {
       throw new ConfigError(`${id} is not a token Atum supports when ATUM_ENV is ${config.env}`);

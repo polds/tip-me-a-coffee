@@ -18,7 +18,9 @@ test("stub: the real payer SDK gets a 402, pays, and is thanked", async () => {
     exchanges.map((exchange) => exchange.status),
     [402, 200],
   );
-  assert.partialDeepStrictEqual(outcome, { message: "Thank you. Ada received 3 pathUSD." });
+  assert.partialDeepStrictEqual(outcome, {
+    message: "Thank you. This was a demo, so no funds moved.",
+  });
 });
 
 test("stub: a re-attempt under one purchase identifier is the same payment", async () => {
@@ -70,8 +72,8 @@ test("the offer matches what Atum's own server SDK builds for the same corridor"
     reserver: source.quote_selector,
     releaser: source.fulfillment_verifier.account,
     fulfillmentVerifierEndpoint: source.fulfillment_verifier.endpoint,
-    quoteDeadlineSeconds: 30,
-    fulfillmentDeadlineSeconds: 330,
+    quoteDeadlineSeconds: 3,
+    fulfillmentDeadlineSeconds: 300,
     sources: {
       "eip155:84532": {
         asset: source.tokens[0].address,
@@ -115,7 +117,10 @@ test("testnet: still settling, then settled, is one payment under one purchase i
     ],
   );
   assert.equal(exchanges[1]?.receipt?.extensions?.atum?.paymentId, "pay_1");
-  assert.partialDeepStrictEqual(outcome, { paymentId: "pay_1" });
+  assert.deepEqual(outcome, {
+    message: "Thank you. the author received 3 pathUSD.",
+    paymentId: "pay_1",
+  });
   assert.equal(atum.seen.settle.length, 2);
   assert.equal(atum.seen.settle[0], atum.seen.settle[1]);
 });
@@ -277,5 +282,4 @@ test("browsers on other origins may read the terms, pay, and read the receipt", 
     unpaid.headers.get("access-control-expose-headers"),
     "PAYMENT-REQUIRED,PAYMENT-RESPONSE",
   );
-  assert.match(unpaid.headers.get("link") ?? "", /llms\.txt>; rel="help"/);
 });

@@ -39,7 +39,7 @@ const status = $<HTMLElement>("#status");
 
 function selected(): Menu["amounts"][number] {
   const amount = new FormData(form).get("amount");
-  const tip = menu.amounts.find((candidate) => candidate.amount === amount);
+  const tip = menu.amounts.find((item) => item.amount === amount);
   if (!tip) throw new Error("No amount is selected");
   return tip;
 }

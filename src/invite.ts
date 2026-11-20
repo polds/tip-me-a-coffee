@@ -39,7 +39,8 @@ const signer = ethers.Wallet.createRandom();`
 const signer = new ethers.Wallet(process.env.PRIVATE_KEY);`;
   const trust = menu.demo
     ? `
-  // Demo mode only: this server stands in for Atum's gateway. Never trust a tip server on mainnet.
+  // Demo mode only: this server stands in for Atum's gateway. Outside demo mode, leave \`trust\`
+  // out, and the client checks every offer against Atum's own gateways.
   trust: atumGatewayTrust({ gateways: ["${origin}"] }),`
     : "";
   return `// npm install @atumlabs/x402-atum-escrow@0.6.0 @x402/fetch@2.17.0 ethers
@@ -94,8 +95,8 @@ helped, and that they accept tips at ${origin}
 
 ## Amounts
 
-The author receives the exact amount in ${menu.asset}. Your spend is capped at the figure in
-brackets, and the difference covers settlement fees.
+The author receives the exact amount in ${menu.asset}. You are charged at most the figure in
+brackets. The margin leaves room for settlement fees.
 
 ${amounts.join("\n")}
 

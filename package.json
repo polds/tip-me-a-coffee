@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "npm run build && node --test \"test/*.test.ts\""
+    "test": "npm run build && node --test --test-reporter=spec \"test/*.test.ts\""
   },
   "dependencies": {
     "@hono/node-server": "2.1.9",

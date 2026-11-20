@@ -35,24 +35,20 @@ export interface Atum {
   settle(request: FacilitatorRequest): Promise<SettleResponse>;
 }
 
+const hasText = (value: unknown, ...keys: string[]): value is Record<string, unknown> =>
+  isRecord(value) && keys.every((key) => typeof value[key] === "string");
+
 function isChainDefaults(body: unknown): body is ChainDefaults {
-  const isToken = (token: unknown) =>
-    isRecord(token) &&
-    typeof token.symbol === "string" &&
-    typeof token.address === "string" &&
-    typeof token.decimals === "number";
-  const versions = isRecord(body) ? body.deposit_request_hash_versions : undefined;
+  if (!hasText(body, "chain_id", "escrow_contract", "quote_selector", "fulfillment_proxy")) {
+    return false;
+  }
+  const { fulfillment_verifier, tokens, deposit_request_hash_versions: versions } = body;
   return (
-    isRecord(body) &&
-    typeof body.chain_id === "string" &&
-    typeof body.escrow_contract === "string" &&
-    typeof body.quote_selector === "string" &&
-    typeof body.fulfillment_proxy === "string" &&
-    isRecord(body.fulfillment_verifier) &&
-    typeof body.fulfillment_verifier.account === "string" &&
-    typeof body.fulfillment_verifier.endpoint === "string" &&
-    Array.isArray(body.tokens) &&
-    body.tokens.every(isToken) &&
+    hasText(fulfillment_verifier, "account", "endpoint") &&
+    Array.isArray(tokens) &&
+    tokens.every(
+      (token) => hasText(token, "symbol", "address") && Number.isInteger(token.decimals),
+    ) &&
     (versions === undefined || (Array.isArray(versions) && versions.every(Number.isInteger)))
   );
 }

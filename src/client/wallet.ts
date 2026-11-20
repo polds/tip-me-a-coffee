@@ -21,6 +21,9 @@ declare global {
   }
 }
 
+/** How long a person gets to read and approve the signature request in their wallet. */
+const SIGNING_MS = 30_000;
+
 /** EIP-1193 reports a request the user declined with code 4001. ethers has its own name for it. */
 const declined = (error: unknown): boolean =>
   isError(error, "ACTION_REJECTED") ||
@@ -29,7 +32,7 @@ const declined = (error: unknown): boolean =>
 async function connect(
   tip: Tip,
   onStep: (step: Step) => void,
-): Promise<{ signer: Signer; network: Network }> {
+): Promise<{ signer: Signer; network: Network; signingMs: number }> {
   const { ethereum } = window;
   if (!ethereum) throw new TipError("no-wallet");
 
@@ -64,7 +67,7 @@ async function connect(
     onStep("approving");
     await ensureSourceApproval(approval);
   }
-  return { signer, network: source.network };
+  return { signer, network: source.network, signingMs: SIGNING_MS };
 }
 
 export async function sendTip(

@@ -76,26 +76,11 @@ export function createApp(deps: { fetch?: typeof globalThis.fetch } = {}) {
   });
 
   // Any page may embed the widget and any payer may call the tip endpoints from a browser.
-  // The x402 client sets Access-Control-Expose-Headers on its paid request, so it is allowed too.
-  const open = cors({
-    origin: "*",
-    allowHeaders: [PAYMENT_SIGNATURE, "Access-Control-Expose-Headers"],
-    exposeHeaders: [PAYMENT_REQUIRED, PAYMENT_RESPONSE],
-  });
+  // A preflight is answered with the headers it asks for, which admits PAYMENT-SIGNATURE.
+  const open = cors({ origin: "*", exposeHeaders: [PAYMENT_REQUIRED, PAYMENT_RESPONSE] });
   app.use("/tip/*", open);
   app.use("/llms.txt", open);
   app.use("/widget.js", open);
-
-  // Machines find the tip menu and the agent instructions from any response.
-  app.use(async (c, next) => {
-    await next();
-    const origin = originOf(c);
-    c.header(
-      "Link",
-      `<${origin}/tip>; rel="payment"; type="application/json", ` +
-        `<${origin}/llms.txt>; rel="help"; type="text/plain"`,
-    );
-  });
 
   app.get("/", async (c) => {
     const origin = originOf(c);
@@ -135,8 +120,7 @@ export function createApp(deps: { fetch?: typeof globalThis.fetch } = {}) {
     }
     const { network, asset } = paymentPayload.accepted;
     const offer = offers.find(
-      (candidate) =>
-        candidate.network === network && candidate.asset.toLowerCase() === asset.toLowerCase(),
+      (offer) => offer.network === network && offer.asset.toLowerCase() === asset.toLowerCase(),
     );
     if (!offer) return ask("The payment answers none of the offers below.");
 
@@ -155,10 +139,12 @@ export function createApp(deps: { fetch?: typeof globalThis.fetch } = {}) {
 
     // A tip buys nothing, so there is no delivery to guard: a re-attempt under the same
     // purchase identifier settles onto the same payment and reads the same thank-you.
+    const demo = tips.config.env === "stub";
+    const received = `${tips.config.authorName} received ${amount} ${tips.destination.symbol}.`;
     return c.json({
       status: "thanks",
-      message: `Thank you. ${tips.config.authorName} received ${amount} ${tips.destination.symbol}.`,
-      demo: tips.config.env === "stub",
+      message: `Thank you. ${demo ? "This was a demo, so no funds moved." : received}`,
+      demo,
       paymentId: outcome.paymentId,
     });
   });

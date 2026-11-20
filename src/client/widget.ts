@@ -7,68 +7,17 @@ import { BACKGROUND, CUP, FOREGROUND, LABEL, RADIUS } from "../brand.ts";
 import { AGENTS_HEADLINE, howToTip, INVITATION } from "../invite.ts";
 
 const STYLE = `
-:host {
-  display: inline-block;
-  font: var(--tip-font, 600 15px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
-}
-[part="button"] {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px 10px 14px;
-  border-radius: var(--tip-radius, ${RADIUS}px);
-  background: var(--tip-bg, ${BACKGROUND});
-  color: var(--tip-fg, ${FOREGROUND});
-  text-decoration: none;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-[part="button"]:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
-}
-[part="icon"] {
-  width: 20px;
-  height: 20px;
-  flex: none;
-}
-:focus-visible {
-  outline-offset: 3px;
-}
-[part="agents"] {
-  max-width: 34em;
-  margin-top: 6px;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.45;
-}
-summary {
-  width: fit-content;
-  cursor: pointer;
-  opacity: 0.8;
-}
-p {
-  margin: 6px 0 0;
-}
-p a {
-  color: inherit;
-}
-@media (prefers-color-scheme: dark) {
-  [part="button"] {
-    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16);
-  }
-  [part="button"]:hover {
-    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16), 0 4px 14px rgb(0 0 0 / 0.6);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  [part="button"] {
-    transition: none;
-  }
-  [part="button"]:hover {
-    transform: none;
-  }
-}
+:host { display: inline-block; font: var(--tip-font, 600 15px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif); }
+[part="button"] { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px 10px 14px; border-radius: var(--tip-radius, ${RADIUS}px); background: var(--tip-bg, ${BACKGROUND}); color: var(--tip-fg, ${FOREGROUND}); text-decoration: none; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+[part="button"]:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgb(0 0 0 / 0.25); }
+[part="icon"] { width: 20px; height: 20px; flex: none; }
+:focus-visible { outline-offset: 3px; }
+[part="agents"] { max-width: 34em; margin-top: 6px; font-size: 12px; font-weight: 400; line-height: 1.45; }
+summary { width: fit-content; cursor: pointer; opacity: 0.8; }
+p { margin: 6px 0 0; }
+p a { color: inherit; }
+@media (prefers-color-scheme: dark) { [part="button"] { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16); } [part="button"]:hover { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16), 0 4px 14px rgb(0 0 0 / 0.6); } }
+@media (prefers-reduced-motion: reduce) { [part="button"] { transition: none; } [part="button"]:hover { transform: none; } }
 `;
 
 const TEMPLATE = `<style>${STYLE}</style>

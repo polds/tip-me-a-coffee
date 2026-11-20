@@ -38,14 +38,6 @@ export interface Offer {
   };
 }
 
-export interface PaymentRequired {
-  x402Version: 2;
-  resource: { url: string; description: string; mimeType: string };
-  accepts: Offer[];
-  extensions: Record<string, unknown>;
-  error: string;
-}
-
 /**
  * The payer's signed credential, decoded from PAYMENT-SIGNATURE. Only `accepted` is read here,
  * to find the offer it answers. The rest travels to Atum's facilitator untouched.
@@ -128,9 +120,10 @@ export function purchaseIdOf(payload: PaymentPayload): string | undefined {
   return isRecord(entry) && isRecord(entry.info) ? text(entry.info.id) : undefined;
 }
 
-export function paymentRequired(url: string, accepts: Offer[], error: string): PaymentRequired {
+/** The body of a 402, which PAYMENT-REQUIRED also carries. `error` holds the ask. */
+export function paymentRequired(url: string, accepts: Offer[], error: string) {
   return {
-    x402Version: 2,
+    x402Version: 2 as const,
     resource: { url, description: "A tip for the author", mimeType: "application/json" },
     accepts,
     extensions: { [PAYMENT_IDENTIFIER]: PAYMENT_IDENTIFIER_DECLARATION },

@@ -45,6 +45,12 @@ export interface PayOptions {
   gateway: string;
   /** Pay from this chain only. Defaults to the first offer. */
   network?: Network;
+  /**
+   * Milliseconds a person needs to approve the signature. The SDK stamps the payment's deadlines
+   * before the wallet asks, and Atum refuses a payment whose 3 second quote window has closed.
+   * The payer's clock runs ahead by this much, which moves both deadlines later together.
+   */
+  signingMs?: number;
   onSettling?: (attempt: number) => void;
   fetch?: typeof globalThis.fetch;
   /** Milliseconds between re-attempts while the tip is still settling. */
@@ -53,7 +59,7 @@ export interface PayOptions {
 }
 
 export async function payTip(options: PayOptions): Promise<Thanks> {
-  const { maxAttempts = 20, intervalMs = 5000 } = options;
+  const { maxAttempts = 20, intervalMs = 5000, signingMs = 0 } = options;
 
   // @x402/fetch reduces a failed signature to its message. The wallet's own error is kept, so
   // the caller can tell a declined signature from a broken one.
@@ -68,6 +74,7 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
   };
   const client = registerAtumEscrowScheme(new x402Client(), {
     signer,
+    now: () => Date.now() + signingMs,
     trust: atumGatewayTrust({ gateways: [options.gateway], fetch: options.fetch }),
     ...(options.network && { networks: [options.network] }),
   });

@@ -12,7 +12,7 @@ const STYLE = `
 * { box-sizing: border-box; }
 body { margin: 0; padding: 24px 16px 48px; background: var(--page); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 520px; margin: 0 auto; display: grid; gap: 20px; }
-section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
+section { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
 h1 { font-size: 26px; line-height: 1.2; margin: 12px 0 8px; }
 h2 { font-size: 18px; margin: 0 0 8px; }
 p { margin: 0 0 12px; }
