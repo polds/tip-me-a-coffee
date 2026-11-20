@@ -27,12 +27,12 @@ in-process, a throwaway wallet in your browser signs the tip, and no funds move.
 
 To tip the way an agent does, run the example that the server publishes:
 
-```sh
+````sh
 mkdir /tmp/tip && cd /tmp/tip
 npm init -y && npm install @atumlabs/x402-atum-escrow@0.6.0 @x402/fetch@2.17.0 ethers
 curl -s http://localhost:8787/llms.txt | sed -n '/^```js$/,/^```$/p' | sed '1d;$d' > tip.mjs
 node tip.mjs
-```
+````
 
 It prints `{ status: 'thanks', ... }`.
 
@@ -82,11 +82,11 @@ Readers without JavaScript see it, and so do agents that read raw HTML.
 A click opens the tip page on your tip server in a new tab. The wallet never runs inside the
 embedding page, so a reader's signature prompt always names your tip server.
 
-| Customize with        | Names                                                                |
-| --------------------- | -------------------------------------------------------------------- |
-| Attributes            | `label`, `amount`, `href`                                            |
-| CSS custom properties | `--tip-bg`, `--tip-fg`, `--tip-radius`, `--tip-font`                 |
-| Parts                 | `::part(button)`, `::part(icon)`, `::part(label)`, `::part(agents)`  |
+| Customize with        | Names                                                               |
+| --------------------- | ------------------------------------------------------------------- |
+| Attributes            | `label`, `amount`, `href`                                           |
+| CSS custom properties | `--tip-bg`, `--tip-fg`, `--tip-radius`, `--tip-font`                |
+| Parts                 | `::part(button)`, `::part(icon)`, `::part(label)`, `::part(agents)` |
 
 `amount` selects an amount on the tip page. `href` names a tip page other than the origin the
 script came from.
@@ -129,16 +129,16 @@ identifier, and that a `200` with `{"status": "thanks"}` means the author was pa
 
 Set these environment variables. On Workers they are the `vars` in `wrangler.jsonc`.
 
-| Variable        | Default                                                  | Meaning                                                                              |
-| --------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Variable        | Default                                                  | Meaning                                                                               |
+| --------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `ATUM_ENV`      | `stub`                                                   | `stub`, `testnet`, or `mainnet`. The last two settle through Atum's x402 facilitator. |
-| `DEST_ADDRESS`  | none                                                     | The address that receives your tips. Required unless `stub`.                         |
-| `DEST_ASSET`    | testnet: pathUSD on Tempo Moderato                       | The token you receive, as CAIP-19. Required on `mainnet`.                            |
-| `SOURCE_ASSETS` | USDC on Base Sepolia (testnet) or on Base (mainnet)      | Comma-separated CAIP-19 list of the tokens payers may pay with. EVM only.            |
-| `TIP_AMOUNTS`   | `1,3,5`                                                  | The tip menu, in units of the token you receive.                                     |
-| `AUTHOR_NAME`   | `the author`                                             | Shown on the tip page, in the menu, and in `llms.txt`.                               |
-| `TIP_MESSAGE`   | `If this helped, please consider supporting the author.` | The ask.                                                                             |
-| `MARKUP_BPS`    | `300`                                                    | How far a payer's spend cap may exceed the tip, in basis points. At most `500`.      |
+| `DEST_ADDRESS`  | none                                                     | The address that receives your tips. Required unless `stub`.                          |
+| `DEST_ASSET`    | testnet: pathUSD on Tempo Moderato                       | The token you receive, as CAIP-19. Required on `mainnet`.                             |
+| `SOURCE_ASSETS` | USDC on Base Sepolia (testnet) or on Base (mainnet)      | Comma-separated CAIP-19 list of the tokens payers may pay with. EVM only.             |
+| `TIP_AMOUNTS`   | `1,3,5`                                                  | The tip menu, in units of the token you receive.                                      |
+| `AUTHOR_NAME`   | `the author`                                             | Shown on the tip page, in the menu, and in `llms.txt`.                                |
+| `TIP_MESSAGE`   | `If this helped, please consider supporting the author.` | The ask.                                                                              |
+| `MARKUP_BPS`    | `300`                                                    | How far a payer's spend cap may exceed the tip, in basis points. At most `500`.       |
 
 The server reads contract addresses and token decimals from Atum's gateway
 (`GET /v1/defaults`). You never configure them. With a bad configuration the Node server
@@ -174,11 +174,11 @@ once. A tip buys nothing, so the server keeps no record of what it delivered.
 
 Measured on Atum's testnet, from Tempo Moderato to Base Sepolia, one sample each:
 
-| Payer                                      | Time to the thank-you |
-| ------------------------------------------ | --------------------- |
-| An agent that signs at once                | 8 seconds             |
-| A person who takes 6 seconds to sign       | 28 seconds            |
-| A person who takes 26 seconds to sign      | Refused, not charged  |
+| Payer                                 | Time to the thank-you |
+| ------------------------------------- | --------------------- |
+| An agent that signs at once           | 8 seconds             |
+| A person who takes 6 seconds to sign  | 28 seconds            |
+| A person who takes 26 seconds to sign | Refused, not charged  |
 
 Atum collects quotes until the payment's quote deadline, which is 3 seconds after the payer
 builds the payment. A person at a wallet prompt needs longer than that. The tip page runs the
@@ -207,15 +207,15 @@ npm run build
 in Chromium through Playwright, and starts the built app under Node and under `workerd`.
 Run `npx playwright install chromium` once before the first run.
 
-| File             | What it holds                                                           |
-| ---------------- | ----------------------------------------------------------------------- |
-| `src/app.ts`     | The HTTP shell on Hono.                                                 |
-| `src/x402.ts`    | The x402 wire protocol for the `atum-escrow` scheme, as pure functions. |
-| `src/tips.ts`    | The tip jar: your config joined with Atum's network facts.              |
-| `src/atum.ts`    | The client for Atum's gateway and facilitator.                          |
-| `src/stub.ts`    | The in-process stand-in for Atum that `stub` mode uses.                 |
-| `src/invite.ts`  | Every word addressed to AI agents.                                      |
-| `src/client/`    | The widget, the tip page's script, and the browser payer.               |
+| File            | What it holds                                                           |
+| --------------- | ----------------------------------------------------------------------- |
+| `src/app.ts`    | The HTTP shell on Hono.                                                 |
+| `src/x402.ts`   | The x402 wire protocol for the `atum-escrow` scheme, as pure functions. |
+| `src/tips.ts`   | The tip jar: your config joined with Atum's network facts.              |
+| `src/atum.ts`   | The client for Atum's gateway and facilitator.                          |
+| `src/stub.ts`   | The in-process stand-in for Atum that `stub` mode uses.                 |
+| `src/invite.ts` | Every word addressed to AI agents.                                      |
+| `src/client/`   | The widget, the tip page's script, and the browser payer.               |
 
 The browser payer bundles Atum's payer SDK and `ethers`, about 800 kB before compression. It
 loads when a reader starts a tip, not with the page.
