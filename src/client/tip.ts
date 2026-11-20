@@ -58,6 +58,14 @@ function selected(): Menu["amounts"][number] {
   return tip;
 }
 
+/** The token the reader pays with. A tip jar with one source shows no picker. */
+const picker = form.querySelector<HTMLSelectElement>("select");
+function source(tip = selected()): Menu["amounts"][number]["payWith"][number] {
+  const chosen = tip.payWith[Number(picker?.value ?? 0)];
+  if (!chosen) throw new Error("No token is selected");
+  return chosen;
+}
+
 function show(state: Step | TipErrorKind | "done" | "error", message: string): void {
   status.dataset.state = state;
   status.textContent = message;
@@ -65,10 +73,8 @@ function show(state: Step | TipErrorKind | "done" | "error", message: string): v
 
 function renderSelection(): void {
   const tip = selected();
-  const options = tip.payWith.map(
-    (source) => `at most ${source.maxAmount} ${source.symbol} on ${source.chain}`,
-  );
-  terms.textContent = `You pay ${options.join(", or ")}. ${menu.author} receives exactly ${tip.amount} ${menu.asset}.`;
+  const { maxAmount, symbol, chain } = source(tip);
+  terms.textContent = `You pay at most ${maxAmount} ${symbol} on ${chain}. ${menu.author} receives exactly ${tip.amount} ${menu.asset}.`;
   button.textContent = `Tip ${tip.amount} ${menu.asset}${menu.demo ? " with a demo wallet" : ""}`;
 }
 
@@ -76,7 +82,8 @@ async function tip(): Promise<void> {
   const { sendTip, TipError } = await import("./wallet.ts");
   try {
     const options = { demo: menu.demo, signingMs: SIGNING_SECONDS * 1000 };
-    const thanks = await sendTip(selected(), options, (step) => show(step, STEPS[step]));
+    const paid = selected();
+    const thanks = await sendTip(paid, source(paid), options, (step) => show(step, STEPS[step]));
     show("done", `${thanks.message} Payment ${thanks.paymentId ?? "confirmed"}.`);
   } catch (error) {
     if (!(error instanceof TipError)) throw error;
@@ -94,3 +101,17 @@ form.addEventListener("submit", async (event) => {
   button.disabled = false;
 });
 renderSelection();
+
+// A wallet names its chain without asking the reader anything, so start on a token it can use.
+if (picker && !menu.demo) {
+  window.ethereum
+    ?.request({ method: "eth_chainId" })
+    .then((id) => {
+      const current = `eip155:${BigInt(String(id))}`;
+      const held = selected().payWith.findIndex((option) => option.network === current);
+      if (held < 0) return;
+      picker.value = String(held);
+      renderSelection();
+    })
+    .catch(() => undefined);
+}

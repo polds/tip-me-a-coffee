@@ -152,7 +152,8 @@ export function createApp(deps: { fetch?: typeof globalThis.fetch } = {}) {
     c.header(PAYMENT_RESPONSE, encodeHeader(settled));
     const outcome = outcomeOf(settled);
     if (outcome.kind !== "settled") {
-      const detail = outcome.kind === "refused" ? ` ${outcome.reason}` : "";
+      // Atum words the reason, and it travels in a header, so it is kept short.
+      const detail = outcome.kind === "refused" ? ` ${outcome.reason.slice(0, 200)}` : "";
       return ask(UNSETTLED[outcome.kind] + detail);
     }
 

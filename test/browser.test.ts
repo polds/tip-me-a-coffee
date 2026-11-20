@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { after, test } from "node:test";
 import { Wallet } from "ethers";
 import { chromium, type Page } from "playwright";
-import { fakeAtum, settlement, startTips, TESTNET_VARS } from "./helpers.ts";
+import { fakeAtum, manySources, settlement, startTips, TESTNET_VARS } from "./helpers.ts";
 
 declare global {
   interface Window {
@@ -144,9 +144,10 @@ test("tip page: with no browser wallet, a real-mode page says what to do", async
 async function playWallet(
   page: Page,
   sign: (request: () => Promise<string>, nth: number) => Promise<string>,
+  chainId = "0x1",
 ) {
   const wallet = Wallet.createRandom();
-  const state = { chainId: "0x1", signatures: 0 };
+  const state = { chainId, signatures: 0, signedFor: "" };
   await page.exposeFunction(
     "walletRequest",
     async (call: { method: string; params?: unknown[] }) => {
@@ -166,6 +167,8 @@ async function playWallet(
           const { domain, types, message } = JSON.parse(String(second));
           delete types.EIP712Domain;
           state.signatures += 1;
+          // Permit2 names the token being spent in the message the wallet signs.
+          state.signedFor = message.permitted?.token ?? "";
           return sign(() => wallet.signTypedData(domain, types, message), state.signatures);
         }
         default:
@@ -208,6 +211,52 @@ test("tip page: a browser wallet switches network, signs, and waits out a slow s
   assert.equal(wallet.signatures, 2);
   assert.equal(atum.seen.settle.length, 2);
   assert.equal(atum.seen.settle[0], atum.seen.settle[1]);
+  await page.close();
+});
+
+test("tip page: with several tokens, the reader picks one and sees only its terms", async () => {
+  const many = manySources(3);
+  const origin = await startTips(many.vars, many.fetch);
+  const page = await browser.newPage();
+  // The wallet is on Base Sepolia, where every token of this tip jar lives.
+  const wallet = await playWallet(page, (request) => request(), "0x14a34");
+  await page.goto(origin);
+
+  const picker = page.getByLabel("Pay with");
+  assert.deepEqual(await picker.locator("option").allTextContents(), [
+    "USDC on Base Sepolia",
+    "USDC on Base Sepolia",
+    "USDC on Base Sepolia",
+  ]);
+  await picker.selectOption("2");
+  assert.equal(
+    await page.locator("#terms").textContent(),
+    "You pay at most 3.09 USDC on Base Sepolia. the author receives exactly 3 pathUSD.",
+  );
+
+  await page.getByRole("button", { name: "Tip 3 pathUSD" }).click();
+  await page.locator('#status[data-state="done"]').waitFor({ timeout: 15_000 });
+  assert.equal(wallet.signatures, 1);
+  assert.equal(wallet.signedFor, many.addresses[2]);
+  await page.close();
+});
+
+test("tip page: a declined signature starts nothing, so nothing is kept to resume", async () => {
+  const atum = fakeAtum();
+  const origin = await startTips(TESTNET_VARS, atum.fetch);
+  const page = await browser.newPage();
+  await playWallet(page, () => {
+    throw new Error("4001 user rejected the request");
+  });
+  await page.goto(origin);
+
+  await page.getByRole("button", { name: "Tip 3 pathUSD" }).click();
+  const status = page.locator('#status[data-state="rejected"]');
+  await status.waitFor({ timeout: 15_000 });
+
+  assert.match((await status.textContent()) ?? "", /Nothing was charged\.$/);
+  assert.equal(await page.evaluate(() => sessionStorage.length), 0);
+  assert.equal(atum.seen.verify.length, 0);
   await page.close();
 });
 

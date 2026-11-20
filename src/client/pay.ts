@@ -8,6 +8,7 @@ import {
   registerAtumEscrowScheme,
 } from "@atumlabs/x402-atum-escrow/client";
 import { wrapFetchWithAtumPayment } from "@atumlabs/x402-atum-escrow/fetch";
+import type { PaymentRequirements } from "@x402/core/types";
 import { x402Client } from "@x402/fetch";
 import type { Network } from "../config.ts";
 import { decodeHeader, isRecord, outcomeOf, PAYMENT_RESPONSE } from "../x402.ts";
@@ -46,8 +47,10 @@ export interface PayOptions {
   signer: EscrowSigner;
   /** The origin whose `/v1/defaults` the payer trusts for the corridor's contracts. */
   gateway: string;
-  /** Pay from this chain only. Defaults to the first offer. */
-  network?: Network;
+  /** The token to pay with, as the tip menu lists it. Defaults to the first offer. */
+  source?: { network: Network; asset: string };
+  /** An earlier call left this purchase in flight, so nothing this call learns can clear it. */
+  resuming?: boolean;
   /**
    * Milliseconds a person needs to approve the signature. The SDK stamps the payment's deadlines
    * before the wallet asks, and Atum refuses a payment whose 3 second quote window has closed.
@@ -71,7 +74,7 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
   let walletError: unknown;
   // What is known about the payment so far decides what a later failure may claim.
   let signed = false;
-  let accepted = false;
+  let accepted = options.resuming ?? false;
   const signer: EscrowSigner = {
     getAddress: () => options.signer.getAddress(),
     signTypedData: (domain, types, value) =>
@@ -87,11 +90,24 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
         },
       ),
   };
-  const client = registerAtumEscrowScheme(new x402Client(), {
+  // A tip jar may take several tokens. The payer signs for the one it was told to use, never
+  // for whichever offer the server happens to list first.
+  const choose = (_version: number, offers: PaymentRequirements[]): PaymentRequirements => {
+    const { source } = options;
+    const offer = source
+      ? offers.find(
+          (offer) =>
+            offer.network === source.network &&
+            offer.asset.toLowerCase() === source.asset.toLowerCase(),
+        )
+      : offers[0];
+    if (!offer) throw new Error("This tip jar does not take that token.");
+    return offer;
+  };
+  const client = registerAtumEscrowScheme(new x402Client(choose), {
     signer,
     now: () => Date.now() + signingMs,
     trust: atumGatewayTrust({ gateways: [options.gateway], fetch: options.fetch }),
-    ...(options.network && { networks: [options.network] }),
   });
   const pay = wrapFetchWithAtumPayment(
     options.fetch ?? ((input, init) => fetch(input, init)),

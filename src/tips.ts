@@ -10,7 +10,7 @@ import {
   parseConfig,
 } from "./config.ts";
 import { stubAtum } from "./stub.ts";
-import type { Offer } from "./x402.ts";
+import { encodeHeader, type Offer, paymentRequired } from "./x402.ts";
 
 /** A configured token, with the facts Atum's gateway reports for it and for its chain. */
 export interface Token extends Asset {
@@ -46,6 +46,14 @@ export const PEGGED = [
   "betaUSD",
   "thetaUSD",
 ];
+
+/**
+ * The most bytes PAYMENT-REQUIRED may take. Node's HTTP clients refuse a response whose headers
+ * pass 16,384 bytes in total, and each source token adds about 1,100 to this one. The rest of
+ * the budget covers the other headers (about 700 bytes behind Cloudflare), and on a tip that
+ * did not settle, PAYMENT-RESPONSE and the reason.
+ */
+const MAX_PAYMENT_REQUIRED_BYTES = 14_000;
 
 /**
  * Atum's defaults. Quotes are collected for 3 seconds after the payer builds a payment, and the
@@ -115,6 +123,18 @@ export async function loadTips(
         );
       }
     }
+    // The public host is not known here, so the check assumes a long one.
+    const resource = {
+      url: `https://${"x".repeat(64)}/tip/${amount}`,
+      description: config.message,
+    };
+    const offers = offersFor(tips, `GET /tip/${amount}`, fulfillment);
+    const bytes = encodeHeader(paymentRequired(resource, offers)).length;
+    if (bytes > MAX_PAYMENT_REQUIRED_BYTES) {
+      throw new ConfigError(
+        `SOURCE_ASSETS: ${sources.length} tokens make the 402's PAYMENT-REQUIRED header ${bytes} bytes, and Node clients cannot read a 402 whose header passes ${MAX_PAYMENT_REQUIRED_BYTES}. List fewer tokens`,
+      );
+    }
   }
   return tips;
 }
@@ -177,6 +197,8 @@ export interface Menu {
   demo: boolean;
   /** The token the author receives. */
   asset: string;
+  /** How far a payer's spend cap may exceed the tip, in basis points. */
+  markupBps: number;
   amounts: {
     amount: string;
     url: string;
@@ -199,6 +221,7 @@ export function menuOf(tips: Tips, origin: string): Menu {
     message: tips.config.message,
     demo: tips.config.env === "stub",
     asset: tips.destination.symbol,
+    markupBps: tips.config.markupBps,
     amounts: [...tips.amounts].map(([amount, fulfillment]) => ({
       amount,
       url: `${origin}/tip/${amount}`,

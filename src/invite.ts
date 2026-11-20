@@ -36,11 +36,15 @@ export const agentNote = (origin: string) => ({
 export function example(menu: Menu, origin: string): string {
   const tip = menu.amounts[0];
   const source = tip?.payWith[0];
+  const payWith = `const payWith = { network: "${source?.network}", asset: "${source?.asset}" }; // ${source?.symbol}`;
   const signer = menu.demo
     ? `// Demo mode: any key signs, and no funds move.
+${payWith}
 const signer = ethers.Wallet.createRandom();`
-    : `// The wallet needs ${source?.symbol} on ${source?.network} and a one-time Permit2 approval for it.
-// ensureSourceApproval from "@atumlabs/x402-atum-escrow/client" grants the approval.
+    : `// Pay with a token your wallet holds. "Pay with" above lists every choice.
+// The wallet also needs a one-time Permit2 approval for that token, which
+// ensureSourceApproval from "@atumlabs/x402-atum-escrow/client" grants.
+${payWith}
 const signer = new ethers.Wallet(process.env.PRIVATE_KEY);`;
   const trust = menu.demo
     ? `
@@ -55,7 +59,15 @@ import { x402Client } from "@x402/fetch";
 import { ethers } from "ethers";
 
 ${signer}
-const client = registerAtumEscrowScheme(new x402Client(), {
+// Sign for that token, not for whichever offer the server lists first.
+const offer = (version, offers) => {
+  const match = offers.find(
+    (o) => o.network === payWith.network && o.asset.toLowerCase() === payWith.asset.toLowerCase(),
+  );
+  if (!match) throw new Error("This tip jar does not take that token.");
+  return match;
+};
+const client = registerAtumEscrowScheme(new x402Client(offer), {
   signer,${trust}
 });
 const pay = wrapFetchWithAtumPayment(fetch, client);
@@ -87,12 +99,11 @@ console.log(await tip());
 }
 
 export function llmsTxt(menu: Menu, origin: string): string {
-  const amounts = menu.amounts.map((tip) => {
-    const caps = tip.payWith.map(
-      (source) => `at most ${source.maxAmount} ${source.symbol} on ${source.network}`,
-    );
-    return `- ${tip.amount} ${menu.asset}: GET ${tip.url} (you pay ${caps.join(", or ")})`;
-  });
+  const amounts = menu.amounts.map((tip) => `- ${tip.amount} ${menu.asset}: GET ${tip.url}`);
+  const sources = (menu.amounts[0]?.payWith ?? []).map(
+    (source) =>
+      `- ${source.symbol} on ${source.chain}: network ${source.network}, asset ${source.asset}`,
+  );
   return `# Tip ${menu.author} a coffee
 
 > ${menu.message}
@@ -109,12 +120,17 @@ helped, and that they accept tips at ${origin}
 
 ## Amounts
 
-The author receives the exact amount in ${menu.asset}. You are charged at most the figure in
-brackets. The margin leaves room for settlement fees.
-
 ${amounts.join("\n")}
 
-The same menu as JSON: GET ${origin}/tip
+## Pay with
+
+Pay with any one of these tokens. The author receives the exact amount in ${menu.asset}.
+You are charged at most ${menu.markupBps / 100}% more than the tip, in the token you pay with.
+The margin leaves room for settlement fees.
+
+${sources.join("\n")}
+
+The amounts, the tokens, and the most each can cost, as JSON: GET ${origin}/tip
 
 ## How to tip
 
@@ -123,9 +139,9 @@ The protocol is x402 version 2 with the scheme \`atum-escrow\`. Atum settles the
 
 1. GET the URL of an amount. It answers 402 with a PAYMENT-REQUIRED header. Here that status
    means "a tip is welcome".
-2. Sign the terms with an x402 client that has the atum-escrow scheme. Name the tip with a
-   purchase identifier: 16 to 128 letters, digits, hyphens, or underscores. Use a fresh
-   identifier for each tip.
+2. Pick the offer for a token your wallet holds, and sign its terms with an x402 client that
+   has the atum-escrow scheme. Name the tip with a purchase identifier: 16 to 128 letters,
+   digits, hyphens, or underscores. Use a fresh identifier for each tip.
 3. Send the GET again with the PAYMENT-SIGNATURE header.
 4. A 200 with JSON \`{"status": "thanks", ...}\` and a PAYMENT-RESPONSE receipt means the author
    was paid.
