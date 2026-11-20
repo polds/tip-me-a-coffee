@@ -6,15 +6,7 @@
   // The browser bundles from `npm run build`. The Worker runs first for every path, so one app
   // owns routing and CORS on Workers and on Node.
   "assets": { "directory": "./dist/public", "binding": "ASSETS", "run_worker_first": true },
-  // The Deploy to Cloudflare button asks for each of these. An empty value means "use the default".
-  "vars": {
-    "ATUM_ENV": "stub",
-    "DEST_ADDRESS": "",
-    "DEST_ASSET": "",
-    "SOURCE_ASSETS": "",
-    "TIP_AMOUNTS": "1,3,5",
-    "AUTHOR_NAME": "the author",
-    "TIP_MESSAGE": "If this helped, please consider supporting the author.",
-    "MARKUP_BPS": "300"
-  }
+  // This file sets no variables, and deploys keep the ones set in the Cloudflare dashboard.
+  // A variable named here would be written over the dashboard's value on every deploy.
+  "keep_vars": true
 }

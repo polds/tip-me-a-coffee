@@ -46,8 +46,14 @@ It prints `{ status: 'thanks', ... }`.
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/polds/tip-me-a-coffee)
 [![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run/?git_repo=https://github.com/polds/tip-me-a-coffee.git)
 
-Both buttons ask for the variables in [Configure](#configure). Leave `ATUM_ENV` as `stub` to
-deploy the demo first.
+The Cloudflare button deploys the demo. To configure it, open the Worker in the Cloudflare
+dashboard, go to **Settings**, then **Variables and Secrets**, and add the variables in
+[Configure](#configure). The Cloud Run button asks for the variables as it deploys. Leave
+`ATUM_ENV` as `stub` to deploy the demo first.
+
+To update a Worker to a newer version of this repository, pull the changes and run
+`npm run deploy`. A deploy keeps the variables you set in the dashboard, because
+`wrangler.jsonc` sets `keep_vars` and names no variables of its own.
 
 On any other host, build the image from the `Dockerfile`, or run `npm run build && npm start`.
 
@@ -132,7 +138,7 @@ identifier, and that a `200` with `{"status": "thanks"}` means the author was pa
 
 ## Configure
 
-Set these environment variables. On Workers they are the `vars` in `wrangler.jsonc`.
+Set these environment variables. On Workers, set them in the dashboard.
 
 | Variable        | Default                                                  | Meaning                                                                               |
 | --------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
