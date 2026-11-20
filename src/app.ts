@@ -69,7 +69,10 @@ export function createApp(deps: { fetch?: typeof globalThis.fetch } = {}) {
       return c.json({ error: "This tip jar is misconfigured.", detail: error.message }, 500);
     }
     if (error instanceof AtumError) {
-      return c.json({ error: "Atum could not be reached.", detail: error.message }, 502);
+      const error502 =
+        "Atum could not be reached. If you sent a payment, its outcome is not known. " +
+        "Re-attempt it under the same purchase identifier, which is charged once.";
+      return c.json({ error: error502, detail: error.message }, 502);
     }
     console.error(error);
     return c.json({ error: "Internal error." }, 500);
@@ -81,6 +84,12 @@ export function createApp(deps: { fetch?: typeof globalThis.fetch } = {}) {
   app.use("/tip/*", open);
   app.use("/llms.txt", open);
   app.use("/widget.js", open);
+
+  // The request's host goes into links, llms.txt, and a runnable example, so it must be a host.
+  app.use(async (c, next) => {
+    if (!/^[a-z0-9.:[\]-]+$/i.test(new URL(c.req.url).host)) return c.text("Bad Host header", 400);
+    await next();
+  });
 
   // Agents that read headers find the instructions without parsing a page.
   app.use(async (c, next) => {

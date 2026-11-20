@@ -84,6 +84,7 @@ export function decodeHeader(value: string): unknown {
 export function parsePaymentPayload(header: string): PaymentPayload | undefined {
   const isPayload = (value: unknown): value is PaymentPayload =>
     isRecord(value) &&
+    value.x402Version === 2 &&
     isRecord(value.accepted) &&
     typeof value.accepted.network === "string" &&
     typeof value.accepted.asset === "string";
@@ -114,10 +115,12 @@ const PAYMENT_IDENTIFIER_DECLARATION = {
   },
 };
 
+/** The purchase a payment names, or `undefined` when it names none the declaration allows. */
 export function purchaseIdOf(payload: PaymentPayload): string | undefined {
   const { extensions } = payload;
   const entry = isRecord(extensions) ? extensions[PAYMENT_IDENTIFIER] : undefined;
-  return isRecord(entry) && isRecord(entry.info) ? text(entry.info.id) : undefined;
+  const id = isRecord(entry) && isRecord(entry.info) ? text(entry.info.id) : undefined;
+  return id && /^[a-zA-Z0-9_-]{16,128}$/.test(id) ? id : undefined;
 }
 
 /**

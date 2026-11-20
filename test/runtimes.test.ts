@@ -55,6 +55,13 @@ test("Node: refuses to start in a real mode with no DEST_ADDRESS", async () => {
   await assert.rejects(node.started, /exited with 1[\s\S]*Refusing to start: DEST_ADDRESS/);
 });
 
+test("Node: refuses to start when a tip has more decimals than the token", async () => {
+  const env = { PORT: "0", TIP_AMOUNTS: "0.0000001" };
+  const node = run("node", ["dist/node.js"], env, /on (http:\S+)/);
+
+  await assert.rejects(node.started, /exited with 1[\s\S]*Refusing to start: TIP_AMOUNTS/);
+});
+
 test("Workers: the same app serves the same tip under workerd", { timeout: 120_000 }, async () => {
   const free = createServer().listen(0);
   const address = free.address();

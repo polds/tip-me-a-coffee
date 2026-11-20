@@ -17,6 +17,7 @@ export type TipErrorKind =
   | "wrong-network"
   | "rejected"
   | "expired"
+  | "unknown"
   | "failed"
   | "refused"
   | "unsettled";
@@ -67,11 +68,15 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
   // @x402/fetch reduces a failed signature to its message. The wallet's own error is kept, so
   // the caller can tell a declined signature from a broken one.
   let walletError: unknown;
+  // What is known about the payment so far decides what a later failure may claim.
+  let signed = false;
+  let accepted = false;
   const signer: EscrowSigner = {
     getAddress: () => options.signer.getAddress(),
     signTypedData: (domain, types, value) =>
       options.signer.signTypedData(domain, types, value).then(
         (signature) => {
+          signed = true;
           options.onSigned?.();
           return signature;
         },
@@ -95,8 +100,14 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
   // Each attempt fetches a fresh 402 and signs again, because a signed payment goes stale in
   // seconds. Only the purchase identifier carries over, and it makes the attempts one payment.
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    signed = false;
+    walletError = undefined;
     const response = await pay(options.url, {}, { paymentIdentifier: options.purchaseId }).catch(
       (error: unknown) => {
+        // A signed payment that got no answer may have reached Atum. An earlier attempt that
+        // Atum accepted is still settling, whatever happens to this one.
+        if (signed) throw new TipError("unknown", error instanceof Error ? error.message : "");
+        if (accepted) throw new TipError("unsettled");
         throw walletError ?? error;
       },
     );
@@ -104,6 +115,8 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
     const receipt = response.headers.get(PAYMENT_RESPONSE);
     if (!receipt) {
       const reason = isRecord(body) && typeof body.error === "string" ? body.error : "";
+      // Only a 4xx says the payment was turned away. A 5xx leaves its outcome open.
+      if (response.status >= 500) throw new TipError("unknown", reason);
       // Atum's facilitator names the deadline that passed while the wallet waited for a person.
       if (reason.includes("quote_deadline")) throw new TipError("expired");
       throw new TipError("refused", reason || `HTTP ${response.status}`);
@@ -118,6 +131,7 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
           paymentId: outcome.paymentId,
         };
       case "pending":
+        accepted = true;
         options.onSettling?.(attempt);
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
         break;

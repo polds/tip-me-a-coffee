@@ -76,7 +76,20 @@ export async function loadTips(
   const amounts = new Map(
     config.amounts.map((amount) => [amount, toAtomic(amount, destination.decimals)]),
   );
-  return { config, atum, destination, sources, amounts };
+  const tips = { config, atum, destination, sources, amounts };
+  // A cap is rounded down to a whole unit of the source token. When that leaves less than the
+  // tip itself, no settlement operator can fill it without a loss, so the tip could never settle.
+  for (const [amount, fulfillment] of amounts) {
+    for (const source of sources) {
+      const cap = spendCap(tips, source, fulfillment) * 10n ** BigInt(destination.decimals);
+      if (cap < fulfillment * 10n ** BigInt(source.decimals)) {
+        throw new ConfigError(
+          `TIP_AMOUNTS: ${amount} ${destination.symbol} is too small to pay in ${source.symbol}`,
+        );
+      }
+    }
+  }
+  return tips;
 }
 
 /**

@@ -25,6 +25,17 @@ const TEMPLATE = `<style>${STYLE}</style>
 </a>
 <p part="agents"><strong>${AGENTS_HEADLINE}.</strong> <span></span> <a>How to tip</a></p>`;
 
+/** The tip server is wherever this script was loaded from, unless `href` names another web page. */
+function tipPage(href: string | null): URL {
+  const home = new URL("/", import.meta.url);
+  try {
+    const page = new URL(href ?? "", home);
+    return /^https?:$/.test(page.protocol) ? page : home;
+  } catch {
+    return home;
+  }
+}
+
 class TipMeACoffee extends HTMLElement {
   static observedAttributes = ["label", "amount", "href"];
 
@@ -38,9 +49,8 @@ class TipMeACoffee extends HTMLElement {
 
   private render(): void {
     const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
-    // The tip server is wherever this script was loaded from, unless `href` names another.
-    const page = new URL(this.getAttribute("href") ?? "/", import.meta.url);
-    const amount = this.getAttribute("amount");
+    const page = tipPage(this.getAttribute("href"));
+    const amount = /^\d+(\.\d+)?$/.exec(this.getAttribute("amount") ?? "")?.[0];
     if (amount) page.searchParams.set("amount", amount);
 
     root.innerHTML = TEMPLATE;

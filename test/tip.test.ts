@@ -168,6 +168,33 @@ test("testnet: a signature that arrives after the quote window is reported as ex
   assert.equal(atum.seen.settle.length, 0);
 });
 
+test("testnet: a settle that errors leaves the outcome unknown, never 'nothing was charged'", async () => {
+  const atum = fakeAtum({ settles: [{ error: "upstream timeout" }], settleStatus: 504 });
+  const origin = await startTips(TESTNET_VARS, atum.fetch);
+
+  const { outcome, exchanges } = await tip(origin, "3");
+
+  assert.deepEqual(
+    exchanges.map((exchange) => exchange.status),
+    [402, 502],
+  );
+  assert.equal(kindOf(outcome), "unknown");
+  assert.equal(atum.seen.settle.length, 1, "the payment did reach Atum");
+  assert.match(String(outcome), /Re-attempt it under the same purchase identifier/);
+});
+
+test("testnet: a payment Atum rejects with a 400 is a refusal, not an outage", async () => {
+  const verify = { isValid: false, invalidReason: "invalid_payload" };
+  const atum = fakeAtum({ verify, verifyStatus: 400 });
+  const origin = await startTips(TESTNET_VARS, atum.fetch);
+
+  const { outcome, exchanges } = await tip(origin, "3");
+
+  assert.equal(exchanges.at(-1)?.status, 402);
+  assert.equal(kindOf(outcome), "refused");
+  assert.match(String(outcome), /invalid_payload/);
+});
+
 test("testnet: /v1/defaults relays the gateway for the corridor's chains only", async () => {
   const origin = await startTips(TESTNET_VARS, fakeAtum().fetch);
 
@@ -193,6 +220,45 @@ test("a real-mode config with no DEST_ADDRESS never serves a 402", async () => {
   assert.match((await response.json()).detail, /DEST_ADDRESS/);
 });
 
+test("a recipient that would lose the tips is a config error", async () => {
+  const zero = "0x0000000000000000000000000000000000000000";
+  // A valid EIP-55 address with the case of one letter flipped.
+  const typo = "0x5Aaeb6053F3E94C9b9A09f33669435E7Ef1BeAeD";
+  const valid = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+  const statusFor = async (DEST_ADDRESS: string) => {
+    const origin = await startTips({ ATUM_ENV: "testnet", DEST_ADDRESS }, fakeAtum().fetch);
+    return (await fetch(`${origin}/tip/3`)).status;
+  };
+
+  assert.deepEqual(
+    await Promise.all([zero, typo, valid, valid.toLowerCase()].map(statusFor)),
+    [500, 500, 402, 402],
+  );
+});
+
+test("a tip menu that repeats an amount or cannot be paid is a config error", async () => {
+  const statusFor = async (TIP_AMOUNTS: string) =>
+    (await fetch(`${await startTips({ TIP_AMOUNTS })}/tip`)).status;
+
+  assert.deepEqual(
+    await Promise.all(["1,1.0", "0.0000001", "0.000001", "1,1.5"].map(statusFor)),
+    [500, 500, 200, 200],
+  );
+
+  // An 18-decimal token admits a tip so small that its cap in a 6-decimal token rounds to zero.
+  const base = fakeAtum().fetch;
+  const eighteen: typeof fetch = async (input, init) => {
+    const response = await base(input, init);
+    const body = await response.json();
+    if (body.chain_id === "eip155:42431") body.tokens[0].decimals = 18;
+    return Response.json(body, { status: response.status });
+  };
+  const tiny = await startTips({ ...TESTNET_VARS, TIP_AMOUNTS: "0.0000001" }, eighteen);
+  const response = await fetch(`${tiny}/tip/0.0000001`);
+  assert.equal(response.status, 500);
+  assert.match((await response.json()).detail, /too small to pay in USDC/);
+});
+
 test("mainnet has no default DEST_ASSET, so it must be configured", async () => {
   const origin = await startTips({ ATUM_ENV: "mainnet", DEST_ADDRESS: TESTNET_VARS.DEST_ADDRESS });
 
@@ -209,6 +275,20 @@ test("an Atum outage is a 502, not a 402", async () => {
   assert.equal((await fetch(`${origin}/tip/3`)).status, 502);
 });
 
+test("a Host header that is not a host is refused before it reaches any link", async () => {
+  const { hostname, port } = new URL(stub);
+  const { request } = await import("node:http");
+  const status = await new Promise((resolve) => {
+    const headers = { host: 'x";globalThis.PWNED=1;"' };
+    request({ hostname, port, path: "/llms.txt", headers }, (response) => {
+      response.resume();
+      resolve(response.statusCode);
+    }).end();
+  });
+
+  assert.equal(status, 400);
+});
+
 test("an unknown amount is a 404 that lists the valid ones", async () => {
   const response = await fetch(`${stub}/tip/7`);
 
@@ -220,14 +300,39 @@ test("an unknown amount is a 404 that lists the valid ones", async () => {
 });
 
 test("a malformed credential is a 400", async () => {
-  for (const credential of ["not base64!", btoa("not json"), btoa('{"x402Version":2}')]) {
+  for (const credential of [
+    "not base64!",
+    btoa("not json"),
+    btoa('{"x402Version":2}'),
+    btoa('{"accepted":{"network":"eip155:84532","asset":"0x00"}}'),
+  ]) {
     const response = await fetch(`${stub}/tip/3`, { headers: { "PAYMENT-SIGNATURE": credential } });
     assert.equal(response.status, 400, credential);
   }
 });
 
+test("stub: a payment that names no valid purchase identifier is not thanked", async () => {
+  // Atum's payer SDK always names a valid purchase, so this credential is built by hand.
+  const credential = (id: string) =>
+    btoa(
+      JSON.stringify({
+        x402Version: 2,
+        accepted: { network: "eip155:84532", asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" },
+        payload: {},
+        extensions: { "payment-identifier": { info: { required: true, id } } },
+      }),
+    );
+  const pay = (id: string) =>
+    fetch(`${stub}/tip/3`, { headers: { "PAYMENT-SIGNATURE": credential(id) } });
+
+  assert.equal((await pay("x")).status, 402);
+  assert.equal((await pay("tip-0123456789abcdef")).status, 200);
+});
+
 test("a credential for an offer this server never made is asked again", async () => {
-  const credential = btoa(JSON.stringify({ accepted: { network: "eip155:1", asset: "0x00" } }));
+  const credential = btoa(
+    JSON.stringify({ x402Version: 2, accepted: { network: "eip155:1", asset: "0x00" } }),
+  );
   const response = await fetch(`${stub}/tip/3`, { headers: { "PAYMENT-SIGNATURE": credential } });
 
   assert.equal(response.status, 402);
@@ -277,6 +382,8 @@ test("button.svg is an image that takes a label and colors", async () => {
   assert.match(custom, />Buy &#60;me&#62; tea<\/text>/);
   assert.match(custom, /fill="#0af"/);
   assert.match(custom, /fill="#ffffff"/);
+  const control = await (await fetch(`${stub}/button.svg?label=a%0Bb%01c`)).text();
+  assert.match(control, />abc<\/text>/);
 });
 
 test("browsers on other origins may read the terms, pay, and read the receipt", async () => {

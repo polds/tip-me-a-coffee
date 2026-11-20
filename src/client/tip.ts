@@ -31,6 +31,8 @@ const ERRORS: Record<TipErrorKind, string> = {
   failed:
     "The payment failed for good and no tip was delivered. Trying again starts a new payment.",
   refused: "The payment was refused and nothing was charged.",
+  unknown:
+    "This tip's outcome is not known yet. Press the button again to check. The same tip is never charged twice.",
   unsettled:
     "Your tip is still settling. It is not lost. Press the button again later to check on the same payment.",
 };

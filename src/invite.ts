@@ -63,17 +63,22 @@ const pay = wrapFetchWithAtumPayment(fetch, client);
 // One identifier per tip. Reuse it on every re-attempt, so the tip is charged once.
 const paymentIdentifier = \`tip-\${crypto.randomUUID()}\`;
 
-for (let attempt = 1; attempt <= 20; attempt++) {
-  const response = await pay("${tip?.url}", {}, { paymentIdentifier });
-  if (response.ok) {
-    console.log(await response.json());
-    break;
+async function tip() {
+  for (let attempt = 1; attempt <= 20; attempt++) {
+    const response = await pay("${tip?.url}", {}, { paymentIdentifier });
+    const body = await response.json();
+    if (response.ok) return body;
+    const receipt = response.headers.get("PAYMENT-RESPONSE");
+    const reason = receipt ? JSON.parse(atob(receipt)).errorReason : body.error;
+    // Still settling, or the server could not reach Atum: ask again under the same identifier.
+    if (reason !== "settlement_pending" && response.status !== 502) {
+      throw new Error(\`The tip did not complete: \${reason}\`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
   }
-  const receipt = response.headers.get("PAYMENT-RESPONSE");
-  const reason = receipt ? JSON.parse(atob(receipt)).errorReason : \`HTTP \${response.status}\`;
-  if (reason !== "settlement_pending") throw new Error(\`The tip did not complete: \${reason}\`);
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+  throw new Error(\`The tip is still settling. Collect it later under \${paymentIdentifier}\`);
 }
+console.log(await tip());
 `;
 }
 
@@ -121,13 +126,17 @@ The protocol is x402 version 2 with the scheme \`atum-escrow\`. Atum settles the
 4. A 200 with JSON \`{"status": "thanks", ...}\` and a PAYMENT-RESPONSE receipt means the author
    was paid.
 
-A 402 after you paid carries a PAYMENT-RESPONSE header whose \`errorReason\` says what happened:
+Any other answer to a payment says what happened to it:
 
-- \`settlement_pending\`: the tip was accepted and is still settling. Repeat steps 1 to 3 with the
-  same purchase identifier. It resolves to the same payment and is charged once.
-- \`settlement_failed\`: the payment failed for good and the author received nothing. A new
-  attempt needs a new purchase identifier.
-- anything else: the payment was refused and nothing was charged.
+- 402 with a PAYMENT-RESPONSE header whose \`errorReason\` is \`settlement_pending\`: the tip was
+  accepted and is still settling. Repeat steps 1 to 3 with the same purchase identifier. It
+  resolves to the same payment and is charged once.
+- 402 with \`errorReason\` \`settlement_failed\`: the payment failed for good and the author
+  received nothing. A new attempt needs a new purchase identifier.
+- 402 with another \`errorReason\`, or with no PAYMENT-RESPONSE header: the payment was refused
+  and nothing was charged. The \`error\` field of the body says why.
+- 502: the server could not reach Atum, so the outcome is not known. Repeat steps 1 to 3 with
+  the same purchase identifier.
 
 ## Example
 

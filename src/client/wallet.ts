@@ -67,6 +67,21 @@ async function connect(
   return { signer, network: source.network };
 }
 
+/** Where purchase identifiers are kept. A browser that blocks site storage throws on access. */
+const memory = new Map<string, string>();
+function storage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> {
+  try {
+    sessionStorage.getItem("");
+    return sessionStorage;
+  } catch {
+    return {
+      getItem: (key) => memory.get(key) ?? null,
+      setItem: (key, value) => void memory.set(key, value),
+      removeItem: (key) => void memory.delete(key),
+    };
+  }
+}
+
 export async function sendTip(
   tip: Tip,
   /** `signingMs` is how long a person gets to approve the signature in their wallet. */
@@ -82,11 +97,12 @@ export async function sendTip(
     // The identifier outlives this call until the tip reaches a final outcome. Pressing the
     // button again, or reloading, then resumes the same payment and never starts a second one.
     const key = `tip:${tip.url}`;
-    const purchaseId = sessionStorage.getItem(key) ?? `tip-${crypto.randomUUID()}`;
-    sessionStorage.setItem(key, purchaseId);
+    const store = storage();
+    const purchaseId = store.getItem(key) ?? `tip-${crypto.randomUUID()}`;
+    store.setItem(key, purchaseId);
 
     onStep("signing");
-    const spent = () => sessionStorage.removeItem(key);
+    const spent = () => store.removeItem(key);
     const thanks = await payTip({
       ...wallet,
       url: tip.url,

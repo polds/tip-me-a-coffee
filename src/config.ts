@@ -1,4 +1,5 @@
 /** Everything the operator decides, parsed once from the environment. */
+import { getAddress } from "ethers/address";
 
 export class ConfigError extends Error {
   override name = "ConfigError";
@@ -90,6 +91,10 @@ const isAtumEnv = (value: string): value is AtumEnv => Object.hasOwn(ENVIRONMENT
 const isAddress = (value: string): value is Address => /^0x[0-9a-fA-F]{40}$/.test(value);
 const isNetwork = (value: string): value is Network => /^eip155:[0-9]+$/.test(value);
 
+function checksummed(address: Address): string {
+  return getAddress(address.toLowerCase());
+}
+
 function parseAsset(name: string, caip19: string): Asset {
   const [network, address, ...rest] = caip19.split("/erc20:");
   if (!network || !address || rest.length > 0 || !isNetwork(network) || !isAddress(address)) {
@@ -115,10 +120,15 @@ export function parseConfig(vars: Record<string, unknown>): Config {
   const { hosted, ...defaults } = ENVIRONMENTS[env];
 
   const recipient = read("DEST_ADDRESS") ?? (hosted ? undefined : STUB_RECIPIENT);
-  if (!recipient || !isAddress(recipient)) {
+  if (!recipient || !isAddress(recipient) || /^0x0+$/.test(recipient)) {
     throw new ConfigError(
       `DEST_ADDRESS must be the 0x address that receives tips when ATUM_ENV is ${env}`,
     );
+  }
+  // A mixed-case address carries a checksum (EIP-55). One that fails it has a typo, and a tip
+  // sent to a mistyped address is gone.
+  if (recipient !== recipient.toLowerCase() && recipient !== checksummed(recipient)) {
+    throw new ConfigError("DEST_ADDRESS fails its checksum. Copy the address again.");
   }
 
   const destAsset = read("DEST_ASSET") ?? defaults.destAsset;
@@ -126,7 +136,9 @@ export function parseConfig(vars: Record<string, unknown>): Config {
 
   const amounts = list(read("TIP_AMOUNTS") ?? "1,3,5");
   const invalid = amounts.find((amount) => !/^(?=.*[1-9])(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(amount));
-  if (invalid !== undefined || new Set(amounts).size !== amounts.length) {
+  // "1" and "1.0" are one amount written twice, so compare them without trailing zeros.
+  const values = amounts.map((amount) => amount.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""));
+  if (invalid !== undefined || new Set(values).size !== amounts.length) {
     throw new ConfigError(
       "TIP_AMOUNTS must be distinct positive amounts separated by commas, such as 1,3,5",
     );

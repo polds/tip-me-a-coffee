@@ -141,8 +141,12 @@ Set these environment variables. On Workers they are the `vars` in `wrangler.jso
 | `MARKUP_BPS`    | `300`                                                    | How far a payer's spend cap may exceed the tip, in basis points. At most `500`.       |
 
 The server reads contract addresses and token decimals from Atum's gateway
-(`GET /v1/defaults`). You never configure them. With a bad configuration the Node server
-refuses to start, and the Worker answers `500`. Neither serves a `402`.
+(`GET /v1/defaults`). You never configure them.
+
+A bad configuration never serves a `402`. The Node server refuses to start, and the Worker
+answers `500` with the reason. That covers a missing or zero `DEST_ADDRESS`, a mixed-case
+address that fails its EIP-55 checksum, a token Atum does not list, and an amount too small for
+the token's decimals.
 
 ## How a tip works
 
@@ -169,6 +173,10 @@ When settlement takes longer than the facilitator waits, the server answers `402
 `settlement_pending` in `PAYMENT-RESPONSE`. The payer sends the tip again under the same
 purchase identifier. Atum resolves that attempt to the same payment, so the tip is charged
 once. A tip buys nothing, so the server keeps no record of what it delivered.
+
+When the server cannot reach Atum after a payer signed, the outcome of the tip is not known.
+The server answers `502` and says so. It never reports such a tip as refused. The payer sends
+the tip again under the same purchase identifier to learn the outcome.
 
 ### How long a tip takes
 

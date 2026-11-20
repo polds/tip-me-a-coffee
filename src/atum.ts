@@ -70,7 +70,11 @@ export function hostedAtum(
       throw new AtumError(`Atum's ${what} could not be reached`, { cause });
     });
     if (response.status === 404) return undefined;
-    if (!response.ok) throw new AtumError(`Atum's ${what} answered HTTP ${response.status}`);
+    // Atum answers a payment it rejects with a 4xx and a well-formed body, which the callers
+    // below read as its answer. A 5xx says nothing about what happened to the payment.
+    if (response.status >= 500) {
+      throw new AtumError(`Atum's ${what} answered HTTP ${response.status}`);
+    }
     return response.json().catch((cause: unknown) => {
       throw new AtumError(`Atum's ${what} answered a body that is not JSON`, { cause });
     });

@@ -18,7 +18,8 @@ const escapeXml = (value: string): string =>
 export function buttonSvg(query: Record<string, string | undefined>): string {
   const color = (value: string | undefined, fallback: string): string =>
     value && /^([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value) ? `#${value}` : fallback;
-  const label = (query.label ?? LABEL).slice(0, 40);
+  // XML has no way to carry a control character, so one would break the image.
+  const label = (query.label ?? LABEL).replace(/\p{Cc}/gu, "").slice(0, 40);
   const background = color(query.bg, BACKGROUND);
   const foreground = color(query.fg, FOREGROUND);
   const requested = Number(query.radius ?? RADIUS);

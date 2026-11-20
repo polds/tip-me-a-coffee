@@ -87,7 +87,14 @@ export const settlement = (
  * Stands in for Atum's hosted testnet gateway and facilitator. A server in `testnet` mode that is
  * given this `fetch` runs its real HTTP path against it. `settles` answers `/settle` in order.
  */
-export function fakeAtum(script: { verify?: object; settles?: object[] } = {}) {
+export function fakeAtum(
+  script: {
+    verify?: object;
+    verifyStatus?: number;
+    settles?: object[];
+    settleStatus?: number;
+  } = {},
+) {
   const settles = [...(script.settles ?? [])];
   /** The `request_id` of every payment that reached `/verify` or `/settle`. */
   const seen = { verify: [] as string[], settle: [] as string[] };
@@ -102,8 +109,14 @@ export function fakeAtum(script: { verify?: object; settles?: object[] } = {}) {
     if (url.pathname !== `/x402/v1/${operation}`) return new Response("", { status: 404 });
     const body = JSON.parse(String(init?.body));
     seen[operation].push(body.paymentPayload.payload.paymentRequest.request_id);
-    if (operation === "verify") return Response.json(script.verify ?? { isValid: true });
-    return Response.json(settles.shift() ?? settlement("paid"));
+    if (operation === "verify") {
+      return Response.json(script.verify ?? { isValid: true }, {
+        status: script.verifyStatus ?? 200,
+      });
+    }
+    return Response.json(settles.shift() ?? settlement("paid"), {
+      status: script.settleStatus ?? 200,
+    });
   };
   return { fetch, seen };
 }
