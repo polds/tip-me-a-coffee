@@ -11,13 +11,13 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "npm run build && node --watch src/node.ts",
-    "dev:worker": "wrangler dev",
+    "dev:worker": "npm run build && wrangler dev",
     "start": "node dist/node.js",
-    "deploy": "wrangler deploy",
+    "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "npm run build && node --test --test-concurrency=1 --test-reporter=spec \"test/*.test.ts\""
+    "test": "npm run build && node --test --test-reporter=spec \"test/*.test.ts\""
   },
   "dependencies": {
     "@hono/node-server": "2.1.9",

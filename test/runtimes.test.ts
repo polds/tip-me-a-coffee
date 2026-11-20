@@ -1,8 +1,4 @@
-/**
- * The app started from each entry point it ships with, and paid with Atum's payer SDK.
- * `wrangler dev` runs the build, which rewrites `dist`. The other test files serve from `dist`,
- * so `npm test` runs the files one at a time.
- */
+/** The built app started from each entry point it ships with, and paid with Atum's payer SDK. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
