@@ -34,33 +34,5 @@
     "playwright": "1.63.0",
     "typescript": "7.0.2",
     "wrangler": "4.165.0"
-  },
-  "cloudflare": {
-    "bindings": {
-      "ATUM_ENV": {
-        "description": "`stub` runs a demo that moves no funds. `testnet` or `mainnet` settle real tips through Atum."
-      },
-      "DEST_ADDRESS": {
-        "description": "The address that receives your tips on the destination chain. Required unless `ATUM_ENV` is `stub`."
-      },
-      "DEST_ASSET": {
-        "description": "The token you receive, as a CAIP-19 id from [Atum's supported assets](https://docs.atum.xyz/get-started/reference/supported-assets). Required on `mainnet`."
-      },
-      "SOURCE_ASSETS": {
-        "description": "Comma-separated CAIP-19 ids of the tokens payers may pay with. Leave empty for the default."
-      },
-      "TIP_AMOUNTS": {
-        "description": "The tip menu, in units of the token you receive, for example `1,3,5`."
-      },
-      "AUTHOR_NAME": {
-        "description": "Your name, shown on the tip page."
-      },
-      "TIP_MESSAGE": {
-        "description": "The ask shown to readers."
-      },
-      "MARKUP_BPS": {
-        "description": "How far the payer's spend cap may exceed the tip, in basis points. At most `500`."
-      }
-    }
   }
 }
