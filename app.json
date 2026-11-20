@@ -1,0 +1,48 @@
+{
+  "name": "tip-me-a-coffee",
+  "env": {
+    "ATUM_ENV": {
+      "description": "stub runs a demo that moves no funds. testnet or mainnet settle real tips through Atum.",
+      "value": "stub",
+      "order": 1
+    },
+    "DEST_ADDRESS": {
+      "description": "The 0x address that receives your tips. Required unless ATUM_ENV is stub.",
+      "required": false,
+      "order": 2
+    },
+    "DEST_ASSET": {
+      "description": "The token you receive, as a CAIP-19 id from https://docs.atum.xyz/get-started/reference/supported-assets. Required on mainnet.",
+      "required": false,
+      "order": 3
+    },
+    "SOURCE_ASSETS": {
+      "description": "Comma-separated CAIP-19 ids of the tokens payers may pay with. Leave empty for the default.",
+      "required": false,
+      "order": 4
+    },
+    "AUTHOR_NAME": {
+      "description": "Your name, shown on the tip page.",
+      "value": "the author",
+      "order": 5
+    },
+    "TIP_MESSAGE": {
+      "description": "The ask shown to readers.",
+      "value": "If this helped, please consider supporting the author.",
+      "order": 6
+    },
+    "TIP_AMOUNTS": {
+      "description": "The tip menu, in units of the token you receive.",
+      "value": "1,3,5",
+      "order": 7
+    },
+    "MARKUP_BPS": {
+      "description": "How far the payer's spend cap may exceed the tip, in basis points. At most 500.",
+      "value": "300",
+      "order": 8
+    }
+  },
+  "options": {
+    "allow-unauthenticated": true
+  }
+}
