@@ -26,7 +26,9 @@ legend { padding: 0; margin-bottom: 8px; font-weight: 600; }
 .amount input { position: absolute; opacity: 0; }
 .amount span { display: block; text-align: center; white-space: nowrap; padding: 10px 12px; border: 2px solid var(--line); border-radius: ${RADIUS}px; font-weight: 600; cursor: pointer; }
 .amount input:checked + span { border-color: ${BACKGROUND}; background: color-mix(in srgb, ${BACKGROUND} 22%, transparent); }
-.amount input:focus-visible + span, button:focus-visible, a:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.source { display: block; margin: 0 0 12px; font-weight: 600; }
+select { display: block; width: 100%; margin-top: 8px; padding: 10px 12px; border: 2px solid var(--line); border-radius: ${RADIUS}px; background: var(--card); color: var(--text); font: inherit; }
+.amount input:focus-visible + span, button:focus-visible, a:focus-visible, select:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
 button { width: 100%; padding: 13px 16px; border: 0; border-radius: ${RADIUS}px; background: ${BACKGROUND}; color: ${FOREGROUND}; font: inherit; font-weight: 700; cursor: pointer; transition: transform 0.15s ease; }
 button:hover:enabled { transform: translateY(-1px); }
 button:disabled { opacity: 0.6; cursor: progress; }
@@ -68,6 +70,14 @@ export function tipPage(menu: Menu, origin: string, requested: string | undefine
                 html`<label class="amount"><input type="radio" name="amount" value="${tip.amount}" ${tip === selected ? "checked" : ""} /><span>${tip.amount} ${menu.asset}</span></label>`,
             )}
           </fieldset>
+          ${
+            selected &&
+            selected.payWith.length > 1 &&
+            html`<label class="source">Pay with <select name="source">${selected.payWith.map(
+              (source, index) =>
+                html`<option value="${index}">${source.symbol} on ${source.chain}</option>`,
+            )}</select></label>`
+          }
           <p id="terms" class="muted"></p>
           <button type="submit">Tip</button>
           <p id="status" role="status"></p>

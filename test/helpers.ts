@@ -15,6 +15,8 @@ export async function startTips(
 
 export interface Exchange {
   status: number;
+  /** The token the payer signed for, on a request that carried a payment. */
+  paidWith?: string;
   /** The decoded PAYMENT-RESPONSE header, when the response carries one. */
   receipt?: { errorReason?: string; extensions?: { atum?: { paymentId?: string } } };
 }
@@ -26,8 +28,11 @@ export async function tip(origin: string, amount: string, options: Partial<PayOp
     const response = await fetch(input, init);
     if (new URL(response.url).pathname.startsWith("/tip/")) {
       const receipt = response.headers.get("PAYMENT-RESPONSE");
+      const sent = input instanceof Request ? input.headers : new Headers(init?.headers);
+      const payment = sent.get("PAYMENT-SIGNATURE");
       exchanges.push({
         status: response.status,
+        ...(payment && { paidWith: JSON.parse(atob(payment)).accepted.asset }),
         ...(receipt && { receipt: JSON.parse(atob(receipt)) }),
       });
     }
@@ -122,6 +127,26 @@ export function fakeAtum(
     });
   };
   return { fetch, seen };
+}
+
+/** `count` dollar tokens on Base Sepolia, as `SOURCE_ASSETS`, and a fake Atum that lists them. */
+export function manySources(count: number, script: Parameters<typeof fakeAtum>[0] = {}) {
+  const addresses = Array.from(
+    { length: count },
+    (_, index) => `0x${String(index + 1).padStart(40, "0")}`,
+  );
+  const atum = fakeAtum(script);
+  const fetch: typeof globalThis.fetch = async (input, init) => {
+    const response = await atum.fetch(input, init);
+    if (!String(input).includes("/v1/defaults")) return response;
+    const body = await response.json();
+    if (body.chain_id === "eip155:84532") {
+      body.tokens = addresses.map((address) => ({ symbol: "USDC", address, decimals: 6 }));
+    }
+    return Response.json(body, { status: response.status });
+  };
+  const SOURCE_ASSETS = addresses.map((address) => `eip155:84532/erc20:${address}`).join(",");
+  return { ...atum, fetch, addresses, vars: { ...TESTNET_VARS, SOURCE_ASSETS } };
 }
 
 export const TESTNET_VARS = {

@@ -6,13 +6,14 @@ import { ensureSourceApproval, needsSourceApproval } from "@atumlabs/x402-atum-e
 import { BrowserProvider, isError, type Signer, toQuantity, Wallet } from "ethers";
 import type { Network } from "../config.ts";
 import type { Menu } from "../tips.ts";
-import { payTip, type Thanks, TipError } from "./pay.ts";
+import { payTip, type Thanks, TipError, type TipErrorKind } from "./pay.ts";
 
 export type { TipErrorKind } from "./pay.ts";
 export { TipError };
 export type Step = "connecting" | "switching" | "approving" | "signing" | "paying" | "settling";
 
 type Tip = Menu["amounts"][number];
+type Source = Tip["payWith"][number];
 
 declare global {
   interface Window {
@@ -26,19 +27,13 @@ const declined = (error: unknown): boolean =>
   isError(error, "ACTION_REJECTED") ||
   (typeof error === "object" && error !== null && "code" in error && error.code === 4001);
 
-async function connect(
-  tip: Tip,
-  onStep: (step: Step) => void,
-): Promise<{ signer: Signer; network: Network }> {
+async function connect(source: Source, onStep: (step: Step) => void): Promise<Signer> {
   const { ethereum } = window;
   if (!ethereum) throw new TipError("no-wallet");
 
   onStep("connecting");
   await ethereum.request({ method: "eth_requestAccounts" });
   const current = `eip155:${BigInt(String(await ethereum.request({ method: "eth_chainId" })))}`;
-  const source = tip.payWith.find((option) => option.network === current) ?? tip.payWith[0];
-  if (!source) throw new TipError("refused", "This tip jar offers no way to pay.");
-
   if (source.network !== current) {
     onStep("switching");
     const chainId = toQuantity(source.network.slice("eip155:".length));
@@ -64,7 +59,7 @@ async function connect(
     onStep("approving");
     await ensureSourceApproval(approval);
   }
-  return { signer, network: source.network };
+  return signer;
 }
 
 /** Where purchase identifiers are kept. A browser that blocks site storage throws on access. */
@@ -82,41 +77,92 @@ function storage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> {
   }
 }
 
+/** A purchase that may still be settling, and the token it was signed for. */
+interface Purchase {
+  id: string;
+  network: Network;
+  asset: string;
+}
+
+function isPurchase(value: unknown): value is Purchase {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    typeof value.id === "string" &&
+    "network" in value &&
+    typeof value.network === "string" &&
+    "asset" in value &&
+    typeof value.asset === "string"
+  );
+}
+
+function readPurchase(stored: string | null): Purchase | undefined {
+  try {
+    const value: unknown = JSON.parse(stored ?? "null");
+    return isPurchase(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Outcomes after which the payment may still complete, so its purchase is kept. */
+const OPEN: ReadonlySet<TipErrorKind> = new Set(["unsettled", "unknown", "refund"]);
+
 export async function sendTip(
   tip: Tip,
+  /** The token the reader chose to pay with. */
+  chosen: Source,
   /** `signingMs` is how long a person gets to approve the signature in their wallet. */
   options: { demo: boolean; signingMs: number },
   onStep: (step: Step) => void,
 ): Promise<Thanks> {
+  // A stored purchase is one whose payment may still be settling. Pressing the button again, or
+  // reloading, resumes it and never starts a second payment. It resumes with the token it was
+  // signed for, because Atum refuses a changed payment under the same identifier.
+  const key = `tip:${tip.url}`;
+  const store = storage();
+  const stored = readPurchase(store.getItem(key));
+  const resuming = stored !== undefined;
+  const purchase = stored ?? {
+    id: `tip-${crypto.randomUUID()}`,
+    network: chosen.network,
+    asset: chosen.asset,
+  };
+  const source =
+    tip.payWith.find(
+      (option) => option.network === purchase.network && option.asset === purchase.asset,
+    ) ?? chosen;
+
   try {
     // Demo mode signs with a key made here and dropped with the tab. No chain is involved.
     const wallet = options.demo
       ? { signer: Wallet.createRandom() }
-      : { ...(await connect(tip, onStep)), signingMs: options.signingMs };
-
-    // The identifier outlives this call until the tip reaches a final outcome. Pressing the
-    // button again, or reloading, then resumes the same payment and never starts a second one.
-    const key = `tip:${tip.url}`;
-    const store = storage();
-    const purchaseId = store.getItem(key) ?? `tip-${crypto.randomUUID()}`;
-    store.setItem(key, purchaseId);
+      : { signer: await connect(source, onStep), signingMs: options.signingMs };
+    store.setItem(key, JSON.stringify(purchase));
 
     onStep("signing");
-    const spent = () => store.removeItem(key);
     const thanks = await payTip({
       ...wallet,
       url: tip.url,
-      purchaseId,
+      purchaseId: purchase.id,
+      source,
+      resuming,
       gateway: location.origin,
       onSigned: () => onStep("paying"),
       onSettling: () => onStep("settling"),
-    }).catch((error: unknown) => {
-      if (error instanceof TipError && error.kind === "failed") spent();
-      throw error;
     });
-    spent();
+    store.removeItem(key);
     return thanks;
   } catch (error) {
-    throw declined(error) ? new TipError("rejected") : error;
+    const failure = declined(error) ? new TipError("rejected") : error;
+    const open = failure instanceof TipError && OPEN.has(failure.kind);
+    const failed = failure instanceof TipError && failure.kind === "failed";
+    if (failed || !(open || resuming)) {
+      store.removeItem(key);
+      throw failure;
+    }
+    // An earlier press left this tip in flight, so whatever stopped this press settles nothing.
+    throw open ? failure : new TipError("unsettled");
   }
 }

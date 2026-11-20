@@ -148,6 +148,12 @@ Set these environment variables. On Workers they are the `vars` in `wrangler.jso
 The server reads contract addresses and token decimals from Atum's gateway
 (`GET /v1/defaults`). You never configure them.
 
+List up to about 12 tokens in `SOURCE_ASSETS`. Each one adds about 1,100 bytes to the
+`PAYMENT-REQUIRED` header of a `402`, and Node's HTTP clients refuse a response whose headers
+pass 16,384 bytes. The server refuses a list that is too long. With more than one token, the
+tip page shows a **Pay with** picker, and `llms.txt` lists every token so an agent can name the
+one its wallet holds.
+
 A bad configuration never serves a `402`. The Node server refuses to start, and the Worker
 answers `500` with the reason. That covers a missing or zero `DEST_ADDRESS`, a mixed-case
 address that fails its EIP-55 checksum, a token Atum does not list, an amount too small for

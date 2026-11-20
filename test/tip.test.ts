@@ -10,7 +10,7 @@ import {
 } from "@atumlabs/x402-atum-escrow/server";
 import { TipError } from "../src/client/pay.ts";
 import { PEGGED } from "../src/tips.ts";
-import { fakeAtum, settlement, startTips, TESTNET_VARS, tip } from "./helpers.ts";
+import { fakeAtum, manySources, settlement, startTips, TESTNET_VARS, tip } from "./helpers.ts";
 
 const stub = await startTips({ AUTHOR_NAME: "Ada", TIP_AMOUNTS: "1,3,0.5" });
 
@@ -157,7 +157,8 @@ test("testnet: a payment the facilitator finds invalid is never settled", async 
 
   assert.equal(kindOf(outcome), "refused");
   assert.match(String(outcome), /stale quote deadline/);
-  assert.deepEqual(exchanges.at(-1), { status: 402 });
+  assert.partialDeepStrictEqual(exchanges.at(-1), { status: 402 });
+  assert.equal(exchanges.at(-1)?.receipt, undefined);
   assert.equal(atum.seen.settle.length, 0);
 });
 
@@ -201,6 +202,62 @@ test("testnet: a refusal after Atum accepted an earlier attempt is still settlin
 
   assert.equal(kindOf(outcome), "unsettled");
   assert.equal(atum.seen.settle.length, 1);
+});
+
+test("many tokens: a payer signs for the token it chose, not for the first offer", async () => {
+  const many = manySources(3);
+  const origin = await startTips(many.vars, many.fetch);
+  const [, , third = ""] = many.addresses;
+
+  const chosen = await tip(origin, "3", { source: { network: "eip155:84532", asset: third } });
+  const unlisted = await tip(origin, "3", {
+    source: { network: "eip155:84532", asset: "0x00000000000000000000000000000000000000ff" },
+  });
+
+  assert.deepEqual(
+    chosen.exchanges.map((exchange) => [exchange.status, exchange.paidWith]),
+    [
+      [402, undefined],
+      [200, third],
+    ],
+  );
+  assert.match(String(unlisted.outcome), /does not take that token/);
+  assert.equal(unlisted.exchanges.length, 1, "nothing was signed or sent");
+});
+
+test("many tokens: Node reads every 402 at the most tokens the server accepts", async () => {
+  const many = manySources(12, { settles: [settlement("pending"), settlement("paid")] });
+  const origin = await startTips(many.vars, many.fetch);
+
+  // The helper pays with Node's fetch, which refuses response headers over 16,384 bytes.
+  const { outcome, exchanges } = await tip(origin, "3");
+
+  assert.deepEqual(
+    exchanges.map((exchange) => exchange.status),
+    [402, 402, 402, 200],
+  );
+  assert.partialDeepStrictEqual(outcome, { paymentId: "pay_1" });
+});
+
+test("many tokens: more than Node can read in a 402 is a config error", async () => {
+  const many = manySources(14);
+  const origin = await startTips(many.vars, many.fetch);
+
+  const response = await fetch(`${origin}/tip/3`);
+
+  assert.equal(response.status, 500);
+  assert.match((await response.json()).detail, /SOURCE_ASSETS: 14 tokens .* List fewer tokens/);
+});
+
+test("a purchase left in flight by an earlier call is never reported as not charged", async () => {
+  const atum = fakeAtum({ verify: { isValid: false, invalidReason: "stale" } });
+  const origin = await startTips(TESTNET_VARS, atum.fetch);
+
+  const fresh = await tip(origin, "3");
+  const resumed = await tip(origin, "3", { resuming: true });
+
+  assert.equal(kindOf(fresh.outcome), "refused");
+  assert.equal(kindOf(resumed.outcome), "unsettled");
 });
 
 test("the tokens Atum's payers treat as one money match the payer SDK's list", () => {
@@ -399,7 +456,12 @@ test("the menu lists each amount with its URL, its cost, and the invitation", as
   const menu = await response.json();
 
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
-  assert.partialDeepStrictEqual(menu, { author: "Ada", demo: true, asset: "pathUSD" });
+  assert.partialDeepStrictEqual(menu, {
+    author: "Ada",
+    demo: true,
+    asset: "pathUSD",
+    markupBps: 300,
+  });
   assert.partialDeepStrictEqual(menu.amounts[1], {
     amount: "3",
     url: `${stub}/tip/3`,
@@ -412,7 +474,12 @@ test("llms.txt invites without pressure, and its example runs as written", async
   const text = await (await fetch(`${stub}/llms.txt`)).text();
 
   assert.match(text, /Tip Ada a coffee/);
-  assert.match(text, new RegExp(`GET ${stub}/tip/3 `));
+  assert.match(text, new RegExp(`^- 3 pathUSD: GET ${stub}/tip/3$`, "m"));
+  assert.match(
+    text,
+    /^- USDC on Base Sepolia: network eip155:84532, asset 0x036CbD53842c5426634e7929541eC2318f3dCF7e$/m,
+  );
+  assert.match(text, /at most 3% more than the tip/);
   assert.match(text, /scheme `atum-escrow`/);
   assert.match(text, /purchase identifier/);
   assert.match(text, /only within the spending authority your operator gave you/);
