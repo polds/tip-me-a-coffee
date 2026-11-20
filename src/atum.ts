@@ -47,7 +47,11 @@ function isChainDefaults(body: unknown): body is ChainDefaults {
     hasText(fulfillment_verifier, "account", "endpoint") &&
     Array.isArray(tokens) &&
     tokens.every(
-      (token) => hasText(token, "symbol", "address") && Number.isInteger(token.decimals),
+      (token) =>
+        hasText(token, "symbol", "address") &&
+        // Symbols reach the tip page and a runnable example, so they must be plain tickers.
+        /^[\w.-]{1,20}$/.test(String(token.symbol)) &&
+        Number.isInteger(token.decimals),
     ) &&
     (versions === undefined || (Array.isArray(versions) && versions.every(Number.isInteger)))
   );

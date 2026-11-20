@@ -18,6 +18,7 @@ export type TipErrorKind =
   | "rejected"
   | "expired"
   | "unknown"
+  | "refund"
   | "failed"
   | "refused"
   | "unsettled";
@@ -117,6 +118,8 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
       const reason = isRecord(body) && typeof body.error === "string" ? body.error : "";
       // Only a 4xx says the payment was turned away. A 5xx leaves its outcome open.
       if (response.status >= 500) throw new TipError("unknown", reason);
+      // Atum turned this attempt away, but an earlier one it accepted is still settling.
+      if (accepted) throw new TipError("unsettled");
       // Atum's facilitator names the deadline that passed while the wallet waited for a person.
       if (reason.includes("quote_deadline")) throw new TipError("expired");
       throw new TipError("refused", reason || `HTTP ${response.status}`);
@@ -135,6 +138,8 @@ export async function payTip(options: PayOptions): Promise<Thanks> {
         options.onSettling?.(attempt);
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
         break;
+      case "refund":
+        throw new TipError("refund", outcome.paymentId);
       case "failed":
         throw new TipError("failed", outcome.paymentId);
       case "refused":

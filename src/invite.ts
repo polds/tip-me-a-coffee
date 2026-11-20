@@ -61,18 +61,22 @@ const client = registerAtumEscrowScheme(new x402Client(), {
 const pay = wrapFetchWithAtumPayment(fetch, client);
 
 // One identifier per tip. Reuse it on every re-attempt, so the tip is charged once.
-const paymentIdentifier = \`tip-\${crypto.randomUUID()}\`;
+// To resume a tip that did not finish, run this again with TIP_ID set to its identifier.
+const paymentIdentifier = process.env.TIP_ID ?? \`tip-\${crypto.randomUUID()}\`;
+console.error(\`TIP_ID=\${paymentIdentifier}\`);
 
 async function tip() {
   for (let attempt = 1; attempt <= 20; attempt++) {
     const response = await pay("${tip?.url}", {}, { paymentIdentifier });
     const body = await response.json();
     if (response.ok) return body;
-    const receipt = response.headers.get("PAYMENT-RESPONSE");
-    const reason = receipt ? JSON.parse(atob(receipt)).errorReason : body.error;
+    const header = response.headers.get("PAYMENT-RESPONSE");
+    const receipt = header ? JSON.parse(atob(header)) : {};
+    const reason = receipt.errorReason ?? body.error;
     // Still settling, or the server could not reach Atum: ask again under the same identifier.
-    if (reason !== "settlement_pending" && response.status !== 502) {
-      throw new Error(\`The tip did not complete: \${reason}\`);
+    const again = reason === "settlement_pending" || response.status === 502;
+    if (!again || receipt.extensions?.atum?.state === "refund_available") {
+      throw new Error(\`The tip did not complete: \${body.error ?? reason}\`);
     }
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
@@ -131,6 +135,9 @@ Any other answer to a payment says what happened to it:
 - 402 with a PAYMENT-RESPONSE header whose \`errorReason\` is \`settlement_pending\`: the tip was
   accepted and is still settling. Repeat steps 1 to 3 with the same purchase identifier. It
   resolves to the same payment and is charged once.
+- The same, with \`extensions.atum.state\` \`refund_available\` in that header: the tip was not
+  delivered and your deposit is yours to reclaim. Stop, and do not pay again. See
+  https://docs.atum.xyz/get-started/support/refunds
 - 402 with \`errorReason\` \`settlement_failed\`: the payment failed for good and the author
   received nothing. A new attempt needs a new purchase identifier.
 - 402 with another \`errorReason\`, or with no PAYMENT-RESPONSE header: the payment was refused

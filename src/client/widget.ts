@@ -40,15 +40,25 @@ class TipMeACoffee extends HTMLElement {
   static observedAttributes = ["label", "amount", "href"];
 
   connectedCallback(): void {
-    this.render();
+    this.show();
   }
 
   attributeChangedCallback(): void {
-    if (this.shadowRoot) this.render();
+    if (this.shadowRoot) this.show();
   }
 
-  private render(): void {
+  private show(): void {
     const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
+    try {
+      this.render(root);
+    } catch {
+      // A host page can forbid what rendering needs, as a Trusted Types policy does. A shadow
+      // root hides the element's own content, so hand that content back: the plain link.
+      root.replaceChildren(document.createElement("slot"));
+    }
+  }
+
+  private render(root: ShadowRoot): void {
     const page = tipPage(this.getAttribute("href"));
     const amount = /^\d+(\.\d+)?$/.exec(this.getAttribute("amount") ?? "")?.[0];
     if (amount) page.searchParams.set("amount", amount);

@@ -15,8 +15,12 @@ declare global {
 const tips = await startTips({ AUTHOR_NAME: "Ada" });
 
 /** Another site that embeds the widget with the snippet from the README. */
-const blog = createServer((_request, response) => {
+const blog = createServer((request, response) => {
   response.setHeader("content-type", "text/html");
+  // A host page with a Trusted Types policy forbids the widget's rendering.
+  if (request.url === "/strict") {
+    response.setHeader("content-security-policy", "require-trusted-types-for 'script'");
+  }
   response.end(`<!doctype html>
 <title>A blog post</title>
 <p>The post.</p>
@@ -107,6 +111,17 @@ test("widget: without JavaScript the snippet is a plain link to the tip page", a
   assert.equal(await link.getAttribute("href"), tips);
   assert.equal(await page.getByText("AI agents can tip too.").isVisible(), true);
   await context.close();
+});
+
+test("widget: when the host page forbids rendering, the plain link stays", async () => {
+  const page = await browser.newPage();
+  await page.goto(`${blogUrl}/strict`);
+
+  const link = page.getByRole("link", { name: "Tip me a coffee", exact: true });
+  await link.waitFor();
+  assert.equal(await link.getAttribute("href"), tips);
+  assert.equal(await page.locator("tip-me-a-coffee > small").first().isVisible(), true);
+  await page.close();
 });
 
 test("tip page: with no browser wallet, a real-mode page says what to do", async () => {

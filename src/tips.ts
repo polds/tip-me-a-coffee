@@ -29,6 +29,25 @@ export interface Tips {
 }
 
 /**
+ * The dollar tokens Atum's payer SDK treats as one money (its `DEFAULT_PEG_GROUPS`). A payer
+ * refuses an offer whose two tokens are neither in this group nor the same symbol. A test
+ * compares this list with the SDK's.
+ */
+export const PEGGED = [
+  "USDC",
+  "USDC.e",
+  "USDT",
+  "USDT0",
+  "PYUSD",
+  "pathUSD",
+  "rUSD",
+  "SBC",
+  "alphaUSD",
+  "betaUSD",
+  "thetaUSD",
+];
+
+/**
  * Atum's defaults. Quotes are collected for 3 seconds after the payer builds a payment, and the
  * gateway waits out that window, so a longer one only slows every tip. The tip must then be
  * delivered within 5 minutes or the payer is refunded.
@@ -72,6 +91,14 @@ export async function loadTips(
     [config.destAsset, ...config.sourceAssets].map(token),
   );
   if (!destination) throw new ConfigError("DEST_ASSET is required");
+  for (const source of sources) {
+    const pegged = PEGGED.includes(source.symbol) && PEGGED.includes(destination.symbol);
+    if (source.symbol !== destination.symbol && !pegged) {
+      throw new ConfigError(
+        `SOURCE_ASSETS: payers refuse to pay ${source.symbol} for a tip in ${destination.symbol}, because the two are not the same money`,
+      );
+    }
+  }
 
   const amounts = new Map(
     config.amounts.map((amount) => [amount, toAtomic(amount, destination.decimals)]),

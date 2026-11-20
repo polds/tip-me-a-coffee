@@ -37,6 +37,9 @@ const UNSETTLED: Record<Exclude<Outcome["kind"], "settled">, string> = {
   failed:
     "Settlement failed for good and no tip was delivered. A fresh attempt needs a new " +
     "purchase identifier.",
+  refund:
+    "The tip was not delivered, and your deposit is yours to reclaim. Do not pay again. " +
+    "See https://docs.atum.xyz/get-started/support/refunds",
   refused: "The payment was refused and nothing was charged.",
 };
 

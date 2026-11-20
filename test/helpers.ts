@@ -70,17 +70,20 @@ const CHAINS = [
 
 const PAID = { success: true, transaction: "0xfeed", network: "eip155:42431" };
 export const settlement = (
-  state: "paid" | "pending" | "failed" | "refused",
+  state: "paid" | "pending" | "refund" | "failed" | "refused",
   paymentId = "pay_1",
 ) => ({
   ...(state === "paid" ? PAID : { success: false, transaction: "", network: "eip155:42431" }),
   ...(state === "pending" && { errorReason: "settlement_pending" }),
+  ...(state === "refund" && { errorReason: "settlement_pending" }),
   ...(state === "failed" && { errorReason: "settlement_failed" }),
   ...(state === "refused" && {
     errorReason: "MISSING_TOKEN_APPROVAL",
     errorMessage: "the payer has not approved Permit2",
   }),
-  ...(state !== "refused" && { extensions: { atum: { paymentId, state } } }),
+  ...(state !== "refused" && {
+    extensions: { atum: { paymentId, state: state === "refund" ? "refund_available" : state } },
+  }),
 });
 
 /**

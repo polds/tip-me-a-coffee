@@ -149,6 +149,8 @@ export type Outcome =
   | { kind: "settled"; paymentId?: string }
   /** Accepted and still settling. Re-attempt under the same purchase identifier. */
   | { kind: "pending"; paymentId?: string }
+  /** Not delivered, and the payer must reclaim the deposit. Re-attempting never ends. */
+  | { kind: "refund"; paymentId?: string }
   /** Terminal. That purchase identifier is spent, so a fresh attempt needs a new one. */
   | { kind: "failed"; paymentId?: string }
   /** Nothing was charged. The same purchase identifier works once the cause is fixed. */
@@ -159,7 +161,12 @@ export function outcomeOf(settled: Record<string, unknown>): Outcome {
   const paymentId = isRecord(atum) ? text(atum.paymentId) : undefined;
   if (settled.success === true) return { kind: "settled", paymentId };
   const reason = text(settled.errorReason);
-  if (reason === "settlement_pending") return { kind: "pending", paymentId };
+  // Atum reports a refund the payer must submit as still settling, and names it in `state`.
+  // https://docs.atum.xyz/get-started/support/refunds#paying-with-x402-or-mpp
+  if (reason === "settlement_pending") {
+    const refund = isRecord(atum) && atum.state === "refund_available";
+    return { kind: refund ? "refund" : "pending", paymentId };
+  }
   if (reason === "settlement_failed") return { kind: "failed", paymentId };
   return { kind: "refused", reason: text(settled.errorMessage) ?? reason ?? "no reason given" };
 }

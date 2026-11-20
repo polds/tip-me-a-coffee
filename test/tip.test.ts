@@ -3,8 +3,13 @@ import { execFile } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { test } from "node:test";
 import { promisify } from "node:util";
-import { AtumEscrowServerScheme, atumEscrowPrice } from "@atumlabs/x402-atum-escrow/server";
+import {
+  AtumEscrowServerScheme,
+  atumEscrowPrice,
+  DEFAULT_PEG_GROUPS,
+} from "@atumlabs/x402-atum-escrow/server";
 import { TipError } from "../src/client/pay.ts";
+import { PEGGED } from "../src/tips.ts";
 import { fakeAtum, settlement, startTips, TESTNET_VARS, tip } from "./helpers.ts";
 
 const stub = await startTips({ AUTHOR_NAME: "Ada", TIP_AMOUNTS: "1,3,0.5" });
@@ -166,6 +171,56 @@ test("testnet: a signature that arrives after the quote window is reported as ex
 
   assert.equal(kindOf(outcome), "expired");
   assert.equal(atum.seen.settle.length, 0);
+});
+
+test("testnet: a refund the payer must claim stops the re-attempts", async () => {
+  const atum = fakeAtum({ settles: [settlement("refund"), settlement("refund")] });
+  const origin = await startTips(TESTNET_VARS, atum.fetch);
+
+  const { outcome, exchanges } = await tip(origin, "3");
+
+  assert.equal(kindOf(outcome), "refund");
+  assert.match(String(outcome), /pay_1/);
+  assert.equal(atum.seen.settle.length, 1, "it did not ask again");
+  assert.equal(exchanges.at(-1)?.status, 402);
+});
+
+test("testnet: a refusal after Atum accepted an earlier attempt is still settling", async () => {
+  const atum = fakeAtum({ settles: [settlement("pending")] });
+  // The first attempt is accepted. By the second, the facilitator finds the signature stale.
+  let verifies = 0;
+  const later: typeof fetch = async (input, init) => {
+    const stale = String(input).endsWith("/verify") && ++verifies > 1;
+    return stale
+      ? Response.json({ isValid: false, invalidReason: "quote_deadline has already passed" })
+      : atum.fetch(input, init);
+  };
+  const origin = await startTips(TESTNET_VARS, later);
+
+  const { outcome } = await tip(origin, "3");
+
+  assert.equal(kindOf(outcome), "unsettled");
+  assert.equal(atum.seen.settle.length, 1);
+});
+
+test("the tokens Atum's payers treat as one money match the payer SDK's list", () => {
+  assert.deepEqual([PEGGED], DEFAULT_PEG_GROUPS);
+});
+
+test("a destination token that payers cannot price is a config error", async () => {
+  const base = fakeAtum().fetch;
+  const renamed: typeof fetch = async (input, init) => {
+    const response = await base(input, init);
+    const body = await response.json();
+    if (body.chain_id === "eip155:42431") body.tokens[0].symbol = "OUSD";
+    return Response.json(body, { status: response.status });
+  };
+  const origin = await startTips(TESTNET_VARS, renamed);
+
+  const response = await fetch(`${origin}/tip/3`);
+
+  assert.equal(response.status, 500);
+  assert.match((await response.json()).detail, /USDC for a tip in OUSD/);
 });
 
 test("testnet: a settle that errors leaves the outcome unknown, never 'nothing was charged'", async () => {

@@ -145,8 +145,10 @@ The server reads contract addresses and token decimals from Atum's gateway
 
 A bad configuration never serves a `402`. The Node server refuses to start, and the Worker
 answers `500` with the reason. That covers a missing or zero `DEST_ADDRESS`, a mixed-case
-address that fails its EIP-55 checksum, a token Atum does not list, and an amount too small for
-the token's decimals.
+address that fails its EIP-55 checksum, a token Atum does not list, an amount too small for
+the token's decimals, and a source token that payers will not accept for your token. Atum's
+payer SDK accepts two tokens that share a symbol, or two of the dollar tokens it treats as one
+money.
 
 ## How a tip works
 
@@ -177,6 +179,10 @@ once. A tip buys nothing, so the server keeps no record of what it delivered.
 When the server cannot reach Atum after a payer signed, the outcome of the tip is not known.
 The server answers `502` and says so. It never reports such a tip as refused. The payer sends
 the tip again under the same purchase identifier to learn the outcome.
+
+When a settlement operator does not deliver, Atum returns the payer's deposit. In the rare case
+that the payer must claim that refund, the server and the tip page say so and point to
+[Refunds](https://docs.atum.xyz/get-started/support/refunds).
 
 ### How long a tip takes
 
